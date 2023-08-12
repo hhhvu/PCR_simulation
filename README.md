@@ -2,7 +2,7 @@
 
 ## Data
 **Data keys:** curve_data, sample_info, igi_gene_call
-
+![](https://github.com/hhhvu/PCR_simulation/blob/main/data/data_schemas.png)
 **curve_call**: contains Rn, dRn, and fluorescence signal readings at each cycle for each curve.
 
 * well_position (str): well position with the letters indicating the rows and the numbers indicating the columns of the well e.g. A1, B13, ... . There are 16 rows and 24 columns that make up 384 wells in total.
