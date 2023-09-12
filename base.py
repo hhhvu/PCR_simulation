@@ -6,8 +6,8 @@ provides all utilities for model fitting apart from model architecture
 import copy
 import os
 
-# import comet_ml
-# from comet_ml import Experiment
+import comet_ml
+from comet_ml import Experiment
 
 import numpy as np
 import pandas as pd
@@ -198,17 +198,17 @@ def fit_model(model, train_loader, val_loader, **kwargs):
     print("-------------------")
     print("fitting model: ", kwargs)
 
-    # experiment = Experiment(
-    #     api_key='7smwpzl0FeZJcESqBITDniX7I',
-    #     project_name='ecg-resnet',
-    #     workspace='cardiac-twins',
-    # )
+    experiment = Experiment(
+        api_key='7smwpzl0FeZJcESqBITDniX7I',
+        project_name='resnet-params-recon',
+        workspace='pcr-simulation',
+    )
 
     hyper_params = {
     "learning_rate": learning_rate,
     "max_epochs": max_epochs,
     }
-    # experiment.log_parameters(hyper_params)
+    experiment.log_parameters(hyper_params)
 
     if not os.path.exists(save_path):
         os.mkdir(save_path)
@@ -263,16 +263,16 @@ def fit_model(model, train_loader, val_loader, **kwargs):
 
         print(f"Loss ({epoch}): {round(vloss,6)}, Stat: {[round(float(v),6) for v in vstat]}")
 
-        # model_dict["train_loss"].append(tloss)
-        # model_dict["val_loss"].append(vloss)
+        model_dict["train_loss"].append(tloss)
+        model_dict["val_loss"].append(vloss)
 
-        # wandb_dict = {'train loss': tloss, 'val loss': vloss}
+        wandb_dict = {'train loss': tloss, 'val loss': vloss}
 
-        # for i in range(len(tstat)):
-        #     wandb_dict["train stat " + str(i)] = tstat[i]
-        #     wandb_dict["val stat " + str(i)] = vstat[i]
+        for i in range(len(tstat)):
+            wandb_dict["train stat " + str(i)] = tstat[i]
+            wandb_dict["val stat " + str(i)] = vstat[i]
 
-        # experiment.log_metrics(wandb_dict, epoch=epoch)
+        experiment.log_metrics(wandb_dict, epoch=epoch)
 
         if vloss < model_dict["best_loss"]:
             print("  (updating best loss)")
