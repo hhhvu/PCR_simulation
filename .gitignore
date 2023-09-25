@@ -56,3 +56,6 @@ pip-delete-this-directory.txt
 .DS_Store
 .ipynb_checkpoints
 .codel
+
+#Miniconda
+Miniconda3-latest-Linux-x86_64.sh
