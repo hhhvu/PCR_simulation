@@ -1,0 +1,48 @@
+---
+title: "known_dilution"
+author: "Huong Vu"
+date: '2023-09-12'
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+```
+
+```{r}
+data_dir = './data/'
+multi_df = read.csv(file.path(data_dir, 'known_dilution_multicomponent.csv'))
+dilution_lv = read.csv(file.path(data_dir, 'dilution_level.csv'))
+dilution_df = read.csv(file.path(data_dir, 'dilution.csv'))
+```
+
+```{r}
+multi_df = multi_df %>%
+  select(-Well) 
+colnames(multi_df) = c('well_position','cycle_no','RnaseP','E gene','N gene')
+multi_df = multi_df %>%
+  pivot_longer(-c(well_position, cycle_no), names_to = 'target', values_to = 'Fn')
+head(multi_df)
+  
+```
+
+```{r}
+dilution_lv = dilution_lv %>%
+  mutate(well_position = paste0(row_pos, col_pos)) %>%
+  select(-c(row_pos, col_pos)) %>%
+  filter(dilution_level != 0)
+dilution_lv
+```
+```{r}
+final_df = dilution_df %>%
+  select(-c(sample_type, auto_baseline)) %>%
+  inner_join(dilution_lv, by = 'well_position') %>%
+  inner_join(multi_df, by = c('well_position', 'target', 'cycle_no'))
+
+final_df
+```
+```{r}
+write.csv(final_df, './data/known_dilution_data.csv')
+```
+
