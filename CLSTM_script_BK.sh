@@ -13,7 +13,7 @@ gpuprof=$(dcgmi group -c mygpus -a $SGE_GPU | awk '{print $10}')
 dcgmi stats -g $gpuprof -e
 dcgmi stats -g $gpuprof -s $JOB_ID
 
-python 
+python non_physics_training.py
 
 # stats
 [[ -n "$JOB_ID" ]] && qstat -j "$JOB_ID"

@@ -88,7 +88,7 @@ if __name__ == "__main__":
     ###########################################
 
     criterion = nn.CrossEntropyLoss()
-    optimizer = optim.Adam(model.parameters(), lr=0.001)
+    optimizer = optim.Adam(model.parameters(), lr=0.01)
 
     best_val_loss = float('inf')
 
@@ -98,9 +98,6 @@ if __name__ == "__main__":
         
         for sequences, labels in train_loader:
             sequences, labels = sequences.to(device).unsqueeze(2), labels.to(device)
-
-            print(sequences.shape)
-            print(labels.shape)
             
             optimizer.zero_grad()
             outputs = model(sequences)
