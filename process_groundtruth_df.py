@@ -3,8 +3,29 @@ import pandas as pd
 import pickle
 
 if __name__ == "__main__":
-    groundtruth_df = pd.read_csv('data/groundtruth_df.csv')
+    groundtruth_df = pd.read_csv('data/groundtruth_df_with_split.csv')
 
+    ###########################################
+    ## Create dataframe with PCR curve labels
+    ###########################################
+
+    ### We should use the groundtruth column as a training label
+
+    #Get target dataframe
+    target_data = groundtruth_df.groupby('curve_idx').tail(1)
+    print(target_data.columns)
+    target_data['Igi_call_quant'] = (target_data['igi_call']=="Positive").astype(int)
+    target_data['groundtruth_target'] = (target_data['groundtruth']==1).astype(int)
+    print(target_data.sort_values(by="curve_idx").head())
+    print(target_data['split'].unique())
+
+    target_data.to_csv('data/groundtruth_df_target_data_split.csv')
+
+    target_df2 = pd.read_csv('data/groundtruth_df_target_data.csv') 
+
+    print(target_df2.sort_values(by="curve_idx").head())
+
+    """
     ####################################
     ## Create dictionary of PCR curves
     ####################################
@@ -33,19 +54,6 @@ if __name__ == "__main__":
         curve_dict[curve_idx] = current_array.copy()
     
     # Open the file in read-binary mode and load the dictionary
-    with open('data/groundtruth_df_curve_dict.pkl', 'wb') as file:
+    with open('data/groundtruth_df_curve_dict_split.pkl', 'wb') as file:
         pickle.dump(curve_dict, file)
-    
-    ###########################################
-    ## Create dataframe with PCR curve labels
-    ###########################################
-
-    ### We should use the groundtruth column as a training label
-
-    #Get target dataframe
-    target_data = groundtruth_df.groupby('curve_idx').tail(1)
-    target_data['Igi_call_quant'] = (target_data['igi_call']=="Positive").astype(int)
-    target_data['groundtruth_target'] = (target_data['groundtruth']==1).astype(int)
-    print(target_data.head())
-
-    target_data.to_csv('data/groundtruth_df_target_data.csv')
+    """
