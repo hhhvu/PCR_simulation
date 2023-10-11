@@ -65,7 +65,7 @@ class ImageSequenceDataset(Dataset):
         sequence = self.curve_dict[curve_idx][:self.sequence_len]
         #TODO fix normalization to normalizing by mean and std of sequences in train set
         sequence = torch.tensor(sequence, dtype=torch.float32)
-        sequence_normalized = (sequence - self.mean) / self.std
+        sequence_normalized = (sequence - torch.tensor(self.mean, dtype=torch.float32)) / torch.tensor(self.std, dtype=torch.float32)
 
         #target data retrieval
         target = self.target_df.loc[self.target_df['curve_idx'] == curve_idx, 'groundtruth_target'].values[0]
@@ -198,7 +198,7 @@ print(torch.version.cuda)
 print(torch.__version__)
 print(device)
 
-#qsub -cwd -q gpu.q -l h_rt=01:30:00,gpu_mem=12000M FusionModel_script.sh
+#qsub -cwd -q gpu.q -l h_rt=04:30:00,gpu_mem=12000M FusionModel_script.sh
 #conda install pytorch torchvision torchaudio cudatoolkit=11.5 -c pytorch
 
 if __name__ == "__main__":
@@ -225,15 +225,15 @@ if __name__ == "__main__":
     mean_list = []
     std_list = []
 
-    for key, curve in tqdm(curve_dict):
-        mean_curve = curve.mean().item()
-        std_curve = curve.std().item()
+    for key, curve in tqdm(curve_dict_filtered.items()):
+        mean_curve = np.array(curve).mean().item()
+        std_curve = np.array(curve).std().item()
 
         mean_list.append(mean_curve)
         std_list.append(std_curve)
 
-    norm_mean = np.array(mean_list).mean().item
-    norm_std = np.array(std_list).mean().item
+    norm_mean = np.array(mean_list).mean().item()
+    norm_std = np.array(std_list).mean().item()
 
     ###########################################
     ## Save curves as images
@@ -303,7 +303,7 @@ if __name__ == "__main__":
     hidden_size = 512
     latent_dim = 512
     num_layers = 3
-    num_epoch = 50
+    num_epoch = 10
 
     model = FusionModel(input_size, hidden_size, latent_dim, sequence_length, num_layers=num_layers)
     # model = ConvLSTM(input_size=input_size, conv_out_channels=32, kernel_size=3, hidden_size=50, output_size=2, seq_len=seq_len)
@@ -391,7 +391,7 @@ if __name__ == "__main__":
         # Save model if it's the best so far
         if val_loss < best_val_loss:
             best_val_loss = val_loss
-            torch.save(model.state_dict(), 'output/fusion_model/best_model.pth')
+            torch.save(model.state_dict(), 'output/fusion_model/best_model_v5_ep10.pth')
             # log_model(experiment, model, model_name=f"CurModel_{epoch}")
 
         print(len(val_pred_labels))
@@ -410,15 +410,18 @@ if __name__ == "__main__":
     plt.plot(val_losses, label="validation loss")
     plt.plot(train_losses, label="training loss")
     plt.legend()
+    plt.axis('on')
     plt.xlabel('Epoch')
     plt.ylabel('Loss')
-    plt.savefig('output/fusion_model/loss_curve.png')
+    plt.savefig('output/fusion_model/loss_curve_v5_ep10.png')
+    plt.clf()
 
     plt.plot(val_aucs, label="validation AUCs")
     plt.legend()
+    plt.axis('on')
     plt.xlabel('Epoch')
     plt.ylabel('AUC')
-    plt.savefig('output/fusion_model/auc_across_epochs_curve.png')
+    plt.savefig('output/fusion_model/auc_across_epochs_curve_v5_ep10.png')
 
     # for name, layer in model.named_modules():
     #     print(name)

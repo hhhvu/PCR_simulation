@@ -1,0 +1,309 @@
+# from comet_ml import Experiment
+# from comet_ml.integration.pytorch import log_model
+
+import torch
+from torch.utils.data import Dataset, DataLoader
+from torch import nn, optim
+import torch.nn.functional as F
+from torchvision import transforms
+
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import roc_auc_score, roc_curve, auc, accuracy_score
+import pandas as pd
+import pickle as pkl
+
+import matplotlib.pyplot as plt
+import numpy as np
+import io, os
+from tqdm import tqdm
+
+from PIL import Image
+from torchvision import models 
+from torchvision.models import resnet18
+
+class ImageSequenceDataset(Dataset):
+    def __init__(self, curve_dict, target_df,img_directory = 'data/curve_imgs/', train=True, sequence_len=40, 
+                 mean=0, std=1):
+        self.curve_dict = curve_dict
+        self.target_df = target_df
+        self.img_directory = img_directory
+        self.train = train
+        self.device = "cuda" if torch.cuda.is_available() else "cpu"
+        self.sequence_len = sequence_len
+
+        self.mean = mean
+        self.std = std
+
+        # Image transformations: Resize and Normalize
+        self.img_transforms = transforms.Compose([
+            transforms.Lambda(lambda image: image.convert('RGB')),
+            transforms.Resize((128, 128)),  # Resizing to a consistent size
+            transforms.ToTensor(),  # Convert PIL image to tensor
+            transforms.Normalize((0.5,), (0.5,))  # Normalizing to [0,1]
+            ])
+
+        #Implementation of train test split
+        if self.train:
+            self.target_df = self.target_df[self.target_df['split']=='train']
+            self.curve_dict = {k: self.curve_dict[k] for k in self.curve_dict.keys() if k in self.target_df['curve_idx'].values}
+        else:
+            self.target_df = self.target_df[self.target_df['split']=='val']
+            self.curve_dict = {k: self.curve_dict[k] for k in self.curve_dict.keys() if k in self.target_df['curve_idx'].values}
+        
+    def __len__(self):
+        return len(self.curve_dict.keys())
+    
+    def __getitem__(self, idx):
+        curve_idx = list(self.curve_dict.keys())[idx]
+
+        # Image processing
+        curve_img_path = os.path.join(self.img_directory, f'curve_{curve_idx}.png')
+        curve_img = Image.open(curve_img_path)
+        curve_img = self.img_transforms(curve_img)
+
+        #sequence processing
+        sequence = self.curve_dict[curve_idx][:self.sequence_len]
+        #TODO fix normalization to normalizing by mean and std of sequences in train set
+        sequence = torch.tensor(sequence, dtype=torch.float32)
+        sequence_normalized = (sequence - torch.tensor(self.mean, dtype=torch.float32)) / torch.tensor(self.std, dtype=torch.float32)
+
+        #target data retrieval
+        target = self.target_df.loc[self.target_df['curve_idx'] == curve_idx, 'groundtruth_target'].values[0]
+
+        return curve_idx, curve_img, sequence_normalized, torch.tensor(target, dtype=torch.long)
+
+class FusionModel(nn.Module):
+    def __init__(self, input_size, hidden_size, latent_dim, sequence_length, num_layers=5):
+        super(FusionModel, self).__init__()
+
+        self.latent_dim = latent_dim
+        
+        # Image processing via EfficientNet_V2_L
+        self.effnet = models.efficientnet_v2_l(pretrained=True)
+        num_ftrs = self.effnet.classifier[1].in_features
+        self.effnet.classifier = nn.Linear(num_ftrs, self.latent_dim)  # Adjusting to output a 512-dimensional 
+
+        # Sequence processing via LSTM
+        self.lstm = nn.LSTM(input_size, hidden_size, num_layers, batch_first=True)
+        self.hidden_state = (torch.zeros(num_layers, sequence_length, hidden_size), torch.zeros(num_layers, sequence_length, hidden_size))
+        
+        # Final fully connected layer to ensure the LSTM output has a size of 512
+        self.lstm_fc = nn.Linear(hidden_size, 512)
+
+        # Fusion of image and sequence representations
+        self.fc = nn.Sequential(
+            nn.Linear(1024, 512),  # Concatenated vectors are of size 1024 (512 from image + 512 from sequence)
+            nn.ReLU(),
+            nn.Linear(512, 256),
+            nn.ReLU(),
+            nn.Linear(256, 128),
+            nn.ReLU(),
+            nn.Linear(128, 64),
+            nn.ReLU(),
+            nn.Linear(64, 1),
+            nn.Sigmoid()
+        )
+
+    def forward(self, image, sequence):
+        # Image processing
+        img_latent = self.effnet(image)
+
+        # Sequence processing
+        lstm_out, _ = self.lstm(sequence)
+        seq_latent = self.lstm_fc(lstm_out[:, -1, :])  # Taking the last output from LSTM for the whole sequence
+
+        # Fusion
+        fusion = torch.cat((img_latent, seq_latent), dim=1)
+        output = self.fc(fusion)
+        return output
+
+#qsub -cwd -q gpu.q -l h_rt=02:30:00,gpu_mem=12000M FusionModel_script.sh
+#conda install pytorch torchvision torchaudio cudatoolkit=11.5 -c pytorch
+
+device = "cuda" if torch.cuda.is_available() else "cpu"
+
+if __name__ == "__main__":
+    
+    ###########################################
+    ## Load the data
+    ###########################################
+
+    with open('data/groundtruth_df_curve_dict_split_v2.pkl', 'rb') as file:
+        curve_dict = pkl.load(file)
+    target_df = pd.read_csv('data/groundtruth_df_target_data_split_v2.csv')  # Load your DataFrame here
+
+    """
+
+    ###########################################
+    ## Get the right normalization values
+    ###########################################
+
+    target_df_filtered = target_df[target_df['split']=='train']
+    curve_dict_filtered = {k: curve_dict[k] for k in curve_dict.keys() if k in target_df_filtered['curve_idx'].values}
+
+    mean_list = []
+    std_list = []
+
+    for key, curve in tqdm(curve_dict_filtered.items()):
+        mean_curve = np.array(curve).mean().item()
+        std_curve = np.array(curve).std().item()
+
+        mean_list.append(mean_curve)
+        std_list.append(std_curve)
+
+    norm_mean = np.array(mean_list).mean().item()
+    norm_std = np.array(std_list).mean().item()
+
+    ###########################################
+    ## Set-up data objects
+    ###########################################
+
+    # Create Dataset and DataLoader
+    train_dataset = ImageSequenceDataset(curve_dict, target_df,img_directory = 'data/curve_imgs/', train=True, sequence_len=40,
+                                         mean=norm_mean, std = norm_std)
+    val_dataset = ImageSequenceDataset(curve_dict, target_df,img_directory = 'data/curve_imgs/', train=False, sequence_len=40,
+                                       mean=norm_mean, std = norm_std)
+    
+    train_loader = DataLoader(train_dataset, batch_size=32, shuffle=True)
+    val_loader = DataLoader(val_dataset, batch_size=32, shuffle=True)
+
+    ###########################################
+    ## Initialize model
+    ###########################################
+
+    # Adjust the parameters as per your needs
+    sequence_length = 40  # Suppose the length of your sequence is 100
+    input_size = 1  # Number of input features per sequence element
+    hidden_size = 512
+    latent_dim = 512
+    num_layers = 3
+    num_epoch = 50
+
+    model = FusionModel(input_size, hidden_size, latent_dim, sequence_length, num_layers=num_layers)
+    model.load_state_dict(torch.load('output/fusion_model/best_model_v4.pth', map_location=torch.device(device)))
+    model.to(device) 
+
+    ###########################################
+    ## Obtain predictions
+    ###########################################
+
+    criterion = nn.BCELoss() 
+    val_loss = 0.0
+    correct_predictions = 0.0
+    total_samples = 0
+    
+    curve_indices = []
+    val_pred_probs, val_pred_labels, val_true_labels = [], [], []
+
+    with torch.no_grad():
+        for curve_ids, images, sequences, labels in tqdm(val_loader):
+            images = images.to(device)
+            sequences, labels = sequences.to(device).unsqueeze(2), labels.to(device)
+
+            outputs = model(images, sequences)
+            loss = criterion(outputs.squeeze(), labels.float())
+            val_loss += loss.item() * sequences.size(0)
+
+            # Assuming threshold of 0.5 for binary classification
+            predicted_labels = (outputs.squeeze() > 0.5).float()
+            
+            loss = criterion(outputs.squeeze(), labels.float())
+            val_loss += loss.item() * sequences.size(0)
+            
+            correct_predictions += (predicted_labels == labels.float()).sum().item()
+            total_samples += labels.size(0)
+
+            curve_ids = curve_ids.cpu().numpy().tolist()
+            output_list = outputs.squeeze(1).cpu().numpy().tolist()
+
+            val_pred_probs.extend(output_list)
+            val_pred_labels.extend(predicted_labels.cpu().numpy().tolist())
+            val_true_labels.extend(labels.cpu().numpy().tolist())
+            curve_indices.extend(curve_ids)
+    
+
+    ###########################################
+    ## Create evaluation dataframe
+    ###########################################
+
+    # Creating the DataFrame
+    eval_df = pd.DataFrame({
+        'curve_idx': curve_indices,
+        'val_pred_probs_fusion': val_pred_probs,
+        'val_pred_labels_fusion': val_pred_labels,
+        'val_true_labels': val_true_labels
+    })
+
+    # Huong GRU preds
+    gru_preds = pd.read_csv('data/gru_best_pred.csv')
+
+    # Align datatype of index for merge 
+    eval_df['curve_idx'] = eval_df['curve_idx'].astype('int64')
+    gru_preds['curve_idx'] = gru_preds['curve_idx'].astype('int64')
+    target_df['curve_idx'] = target_df['curve_idx'].astype('int64')
+
+    # Huong GRU preds
+    eval_df = eval_df.merge(gru_preds, how='left', on='curve_idx')
+
+    # IGI calls
+    eval_df = eval_df.merge(target_df[['curve_idx', 'Igi_call_quant']], how='left', on='curve_idx')
+
+    # Save eval_df
+    eval_df.to_csv('data/fusion_val_preds_v2.csv')
+    """
+
+    ###########################################
+    ## Evaluate predictions  
+    ###########################################
+    eval_df = pd.read_csv('data/fusion_val_preds_v2.csv')
+    print(eval_df.head(10))
+
+    eval_df['Igi_call_quant'] = eval_df['Igi_call_quant_x']
+
+    # Calculate ROC scores
+    auc_fusion = roc_auc_score(eval_df['val_true_labels'],eval_df['val_pred_probs_fusion'])
+    #auc_gru = roc_auc_score(eval_df['val_true_labels'],eval_df['prob'])
+    auc_igi = roc_auc_score(eval_df['val_true_labels'],eval_df['Igi_call_quant'])
+
+    print(f"AUC Fusion Model:{auc_fusion}")
+    #print(f"AUC GRU Model:{auc_gru}")
+    print(f"AUC IGI Model:{auc_igi}")
+
+    # Calculating the ROC curve and AUC for each model
+    fpr_fusion, tpr_fusion, thresholds_fusion = roc_curve(eval_df['val_true_labels'], eval_df['val_pred_probs_fusion'])
+    roc_auc_fusion = auc(fpr_fusion, tpr_fusion)
+
+    # fpr_gru, tpr_gru, _ = roc_curve(eval_df['val_true_labels'], eval_df['prob'])
+    # roc_auc_gru = auc(fpr_gru, tpr_gru)
+
+    fpr_igi, tpr_igi, thresholds_igi = roc_curve(eval_df['val_true_labels'],eval_df['Igi_call_quant'])
+    roc_auc_igi = auc(fpr_igi, tpr_igi)
+
+    # Plotting the AUC curves
+    plt.figure(figsize=(10, 8))
+    #plt.plot(fpr_gru, tpr_gru, color='blue', lw=2, label=f'ROC GRU (area = {roc_auc_gru:.2f})')
+    plt.plot(fpr_igi, tpr_igi, color='red', lw=2, label=f'ROC IGI (area = {roc_auc_igi:.2f})')
+    plt.plot(fpr_fusion, tpr_fusion, color='green', lw=2, label=f'ROC Fusion (area = {roc_auc_fusion:.2f})')
+    plt.plot([0, 1], [0, 1], color='gray', linestyle='--')
+    plt.xlabel('False Positive Rate')
+    plt.ylabel('True Positive Rate')
+    plt.title('Receiver Operating Characteristic (ROC) Curve')
+    plt.legend(loc="lower right")
+    plt.savefig('output/fusion_model/eval_ROC_comparision_v2.png')
+    plt.show()
+
+    # Find the best threshold for val_pred_probs_fusion that maximizes accuracy
+    accuracies = [accuracy_score(eval_df['val_true_labels'], [1 if p >= th else 0 for p in eval_df['val_pred_probs_fusion'].tolist()]) for th in thresholds_fusion]
+    best_threshold_index = np.argmax(accuracies)
+    best_threshold = thresholds_fusion[best_threshold_index]
+    best_accuracy = accuracies[best_threshold_index]
+
+    print(f"Best Threshold: {best_threshold}")
+    print(f"Best Accuracy for Fusion: {best_accuracy}")
+
+    # Compare the accuracy to Igi_call_quant
+    accuracy_igi_call_quant = accuracy_score(eval_df['val_true_labels'], eval_df['Igi_call_quant'])
+    print(f"Accuracy for Igi_call_quant: {accuracy_igi_call_quant}")
+
+
+
