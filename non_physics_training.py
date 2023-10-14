@@ -117,6 +117,35 @@ class FusionModel(nn.Module):
         output = self.fc(fusion)
         return output
 
+class ImageModel(nn.Module):
+    def __init__(self, input_size, hidden_size, latent_dim, sequence_length, num_layers=5):
+        super(ImageModel, self).__init__()
+
+        self.latent_dim = latent_dim
+        
+        # Image processing via EfficientNet_V2_L
+        self.effnet = models.efficientnet_v2_l(pretrained=True)
+        num_ftrs = self.effnet.classifier[1].in_features
+        self.effnet.classifier = nn.Linear(num_ftrs, self.latent_dim)  # Adjusting to output a 512-dimensional 
+
+        # FC Layers
+        self.fc = nn.Sequential(
+            nn.Linear(self.latent_dim, 256),
+            nn.ReLU(),
+            nn.Linear(256, 128),
+            nn.ReLU(),
+            nn.Linear(128, 64),
+            nn.ReLU(),
+            nn.Linear(64, 1),
+            nn.Sigmoid()
+        )
+
+    def forward(self, image, sequence):
+        # Image processing
+        img_latent = self.effnet(image)
+        output = self.fc(img_latent)
+        return output
+
 
 class PlotImageDataset(Dataset):
     def __init__(self, curve_dict, target_df, save_plots = False):
