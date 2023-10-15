@@ -146,7 +146,7 @@ class ImageModel(nn.Module):
         output = self.fc(img_latent)
         return output
 
-
+'''
 class PlotImageDataset(Dataset):
     def __init__(self, curve_dict, target_df, save_plots = False):
         self.curve_dict = curve_dict
@@ -173,7 +173,7 @@ class PlotImageDataset(Dataset):
         # TODO: LOAD IMAGES FROM IMAGE FOLDER AND CHANGE OUTPUT OF GETITEM
         
         return torch.tensor(sequence, dtype=torch.float32), torch.tensor(target, dtype=torch.long)
-
+'''
 
 class SequencesDataset(Dataset):
     def __init__(self, curve_dict, target_df, save_plots = False):
