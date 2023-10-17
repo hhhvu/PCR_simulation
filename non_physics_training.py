@@ -227,8 +227,14 @@ print(torch.version.cuda)
 print(torch.__version__)
 print(device)
 
-#qsub -cwd -q gpu.q -l h_rt=04:30:00,gpu_mem=12000M FusionModel_script.sh
+# Command to send job to Wynton GPUs
+#qsub -cwd -q gpu.q -l h_rt=08:30:00,gpu_mem=12000M FusionModel_script.sh
+
+#Make sure to install CUDA version compatible with GPU drivers installed on wynton
 #conda install pytorch torchvision torchaudio cudatoolkit=11.5 -c pytorch
+
+#To export models run in local terminal
+#scp alex_schubert@plog1.wynton.ucsf.edu:/wynton/protected/home/ibrahim/alex_schubert/PCR_simulation/output/fusion_model/best_model_v2.pth ~/Alex/Studium/01_UC_Berkeley/01_Research_Projects/PCR_simulation/PCR_simulation/
 
 if __name__ == "__main__":
     
@@ -332,7 +338,7 @@ if __name__ == "__main__":
     hidden_size = 512
     latent_dim = 512
     num_layers = 3
-    num_epoch = 10
+    num_epoch = 50
 
     model = FusionModel(input_size, hidden_size, latent_dim, sequence_length, num_layers=num_layers)
     # model = ConvLSTM(input_size=input_size, conv_out_channels=32, kernel_size=3, hidden_size=50, output_size=2, seq_len=seq_len)
