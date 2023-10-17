@@ -73,16 +73,18 @@ class ImageSequenceDataset(Dataset):
 
         return curve_img, sequence_normalized, torch.tensor(target, dtype=torch.long)
     
-class ImageModel(nn.Module):
-    def __init__(self, input_size, hidden_size, latent_dim):
-        super(ImageModel, self).__init__()
+class SequenceModel(nn.Module):
+    def __init__(self, input_size, hidden_size, latent_dim, sequence_length):
+        super(SequenceModel, self).__init__()
 
         self.latent_dim = latent_dim
         
-        # Image processing via EfficientNet_V2_L
-        self.effnet = models.efficientnet_v2_l(pretrained=True)
-        num_ftrs = self.effnet.classifier[1].in_features
-        self.effnet.classifier = nn.Linear(num_ftrs, self.latent_dim)  # Adjusting to output a 512-dimensional 
+        # Sequence processing via LSTM
+        self.lstm = nn.LSTM(input_size, hidden_size, num_layers, batch_first=True)
+        self.hidden_state = (torch.zeros(num_layers, sequence_length, hidden_size), torch.zeros(num_layers, sequence_length, hidden_size))
+        
+        # Final fully connected layer to ensure the LSTM output has a size of 512
+        self.lstm_fc = nn.Linear(hidden_size, 512)
 
         # FC Layers
         self.fc = nn.Sequential(
@@ -97,9 +99,11 @@ class ImageModel(nn.Module):
         )
 
     def forward(self, image, sequence):
-        # Image processing
-        img_latent = self.effnet(image)
-        output = self.fc(img_latent)
+        # Sequence processing
+        lstm_out, _ = self.lstm(sequence)
+        seq_latent = self.lstm_fc(lstm_out[:, -1, :])  # Taking the last output from LSTM for the whole sequence
+
+        output = self.fc(seq_latent)
         return output
     
 
@@ -185,7 +189,7 @@ if __name__ == "__main__":
     num_layers = 3
     num_epoch = 50
 
-    model = ImageModel(input_size, hidden_size, latent_dim)
+    model = SequenceModel(input_size, hidden_size, latent_dim, sequence_length)
     model.to(device)  # If you are using GPU
 
 
@@ -199,7 +203,7 @@ if __name__ == "__main__":
         workspace="pcr-simulation"
     )
 
-    experiment.set_name('ImageModel_MetricTest')
+    experiment.set_name('SequenceModel_MetricTest')
 
 
     ###########################################
@@ -265,9 +269,9 @@ if __name__ == "__main__":
         # Save model if it's the best so far
         if val_loss < best_val_loss:
             best_val_loss = val_loss
-            if not os.path.exists('output/image_model/'):
-                os.makedirs('output/image_model/')
-            torch.save(model.state_dict(), 'output/image_model/best_model_ep50.pth')
+            if not os.path.exists('output/seq_model/'):
+                os.makedirs('output/seq_model/')
+            torch.save(model.state_dict(), 'output/seq_model/best_model_ep50.pth')
             log_model(experiment, model, model_name=f"CurModel_{epoch}")
 
         print(len(val_pred_labels))

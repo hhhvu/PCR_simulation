@@ -73,16 +73,18 @@ class ImageSequenceDataset(Dataset):
 
         return curve_idx, curve_img, sequence_normalized, torch.tensor(target, dtype=torch.long)
     
-class ImageModel(nn.Module):
-    def __init__(self, input_size, hidden_size, latent_dim):
-        super(ImageModel, self).__init__()
+class SequenceModel(nn.Module):
+    def __init__(self, input_size, hidden_size, latent_dim, sequence_length):
+        super(SequenceModel, self).__init__()
 
         self.latent_dim = latent_dim
         
-        # Image processing via EfficientNet_V2_L
-        self.effnet = models.efficientnet_v2_l(pretrained=True)
-        num_ftrs = self.effnet.classifier[1].in_features
-        self.effnet.classifier = nn.Linear(num_ftrs, self.latent_dim)  # Adjusting to output a 512-dimensional 
+        # Sequence processing via LSTM
+        self.lstm = nn.LSTM(input_size, hidden_size, num_layers, batch_first=True)
+        self.hidden_state = (torch.zeros(num_layers, sequence_length, hidden_size), torch.zeros(num_layers, sequence_length, hidden_size))
+        
+        # Final fully connected layer to ensure the LSTM output has a size of 512
+        self.lstm_fc = nn.Linear(hidden_size, 512)
 
         # FC Layers
         self.fc = nn.Sequential(
@@ -97,9 +99,11 @@ class ImageModel(nn.Module):
         )
 
     def forward(self, image, sequence):
-        # Image processing
-        img_latent = self.effnet(image)
-        output = self.fc(img_latent)
+        # Sequence processing
+        lstm_out, _ = self.lstm(sequence)
+        seq_latent = self.lstm_fc(lstm_out[:, -1, :])  # Taking the last output from LSTM for the whole sequence
+
+        output = self.fc(seq_latent)
         return output
     
 
@@ -167,8 +171,8 @@ if __name__ == "__main__":
     num_layers = 3
     num_epoch = 10
 
-    model = ImageModel(input_size, hidden_size, latent_dim)
-    model.load_state_dict(torch.load('output/image_model/best_model_ep10.pth', map_location=torch.device(device)))
+    model = SequenceModel(input_size, hidden_size, latent_dim, sequence_length)
+    model.load_state_dict(torch.load('output/seq_model/best_model_ep50.pth', map_location=torch.device(device)))
     model.to(device) 
 
 
@@ -218,8 +222,8 @@ if __name__ == "__main__":
     # Creating the DataFrame
     eval_df = pd.DataFrame({
         'curve_idx': curve_indices,
-        'val_pred_probs_image': val_pred_probs,
-        'val_pred_labels_image': val_pred_labels,
+        'val_pred_probs_seq': val_pred_probs,
+        'val_pred_labels_seq': val_pred_labels,
         'val_true_labels': val_true_labels
     })
 
@@ -238,29 +242,29 @@ if __name__ == "__main__":
     eval_df = eval_df.merge(target_df[['curve_idx', 'Igi_call_quant']], how='left', on='curve_idx')
 
     # Save eval_df
-    eval_df.to_csv('data/image_val_preds.csv')
+    eval_df.to_csv('data/seq_val_preds.csv')
 
 
     ###########################################
     ## Evaluate predictions  
     ###########################################
-    eval_df = pd.read_csv('data/image_val_preds.csv')
+    eval_df = pd.read_csv('data/seq_val_preds.csv')
     print(eval_df.head(10))
 
     # eval_df['Igi_call_quant'] = eval_df['Igi_call_quant_x']
 
     # Calculate ROC scores
-    auc_image = roc_auc_score(eval_df['val_true_labels'],eval_df['val_pred_probs_image'])
+    auc_seq = roc_auc_score(eval_df['val_true_labels'],eval_df['val_pred_probs_seq'])
     #auc_gru = roc_auc_score(eval_df['val_true_labels'],eval_df['prob'])
     auc_igi = roc_auc_score(eval_df['val_true_labels'],eval_df['Igi_call_quant'])
 
-    print(f"AUC Image Model:{auc_image}")
+    print(f"AUC Sequence Model:{auc_seq}")
     #print(f"AUC GRU Model:{auc_gru}")
     print(f"AUC IGI Model:{auc_igi}")
 
     # Calculating the ROC curve and AUC for each model
-    fpr_image, tpr_image, thresholds_image = roc_curve(eval_df['val_true_labels'], eval_df['val_pred_probs_image'])
-    roc_auc_image = auc(fpr_image, tpr_image)
+    fpr_seq, tpr_seq, thresholds_seq = roc_curve(eval_df['val_true_labels'], eval_df['val_pred_probs_seq'])
+    roc_auc_seq = auc(fpr_seq, tpr_seq)
 
     # fpr_gru, tpr_gru, _ = roc_curve(eval_df['val_true_labels'], eval_df['prob'])
     # roc_auc_gru = auc(fpr_gru, tpr_gru)
@@ -272,23 +276,23 @@ if __name__ == "__main__":
     plt.figure(figsize=(10, 8))
     #plt.plot(fpr_gru, tpr_gru, color='blue', lw=2, label=f'ROC GRU (area = {roc_auc_gru:.2f})')
     plt.plot(fpr_igi, tpr_igi, color='red', lw=2, label=f'ROC IGI (area = {roc_auc_igi:.2f})')
-    plt.plot(fpr_image, tpr_image, color='green', lw=2, label=f'ROC Image (area = {roc_auc_image:.2f})')
+    plt.plot(fpr_seq, tpr_seq, color='green', lw=2, label=f'ROC Sequence (area = {roc_auc_seq:.2f})')
     plt.plot([0, 1], [0, 1], color='gray', linestyle='--')
     plt.xlabel('False Positive Rate')
     plt.ylabel('True Positive Rate')
     plt.title('Receiver Operating Characteristic (ROC) Curve')
     plt.legend(loc="lower right")
-    plt.savefig('output/image_model/eval_ROC_comparision.png')
+    plt.savefig('output/seq_model/eval_ROC_comparision.png')
     plt.show()
 
-    # Find the best threshold for val_pred_probs_image that maximizes accuracy
-    accuracies = [accuracy_score(eval_df['val_true_labels'], [1 if p >= th else 0 for p in eval_df['val_pred_probs_image'].tolist()]) for th in thresholds_image]
+    # Find the best threshold for val_pred_probs_seq that maximizes accuracy
+    accuracies = [accuracy_score(eval_df['val_true_labels'], [1 if p >= th else 0 for p in eval_df['val_pred_probs_seq'].tolist()]) for th in thresholds_seq]
     best_threshold_index = np.argmax(accuracies)
-    best_threshold = thresholds_image[best_threshold_index]
+    best_threshold = thresholds_seq[best_threshold_index]
     best_accuracy = accuracies[best_threshold_index]
 
     print(f"Best Threshold: {best_threshold}")
-    print(f"Best Accuracy for image: {best_accuracy}")
+    print(f"Best Accuracy for sequence: {best_accuracy}")
 
     # Compare the accuracy to Igi_call_quant
     accuracy_igi_call_quant = accuracy_score(eval_df['val_true_labels'], eval_df['Igi_call_quant'])
