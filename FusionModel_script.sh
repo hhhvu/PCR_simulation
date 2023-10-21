@@ -26,7 +26,7 @@ hostname
 
 conda activate PCR_v2
 nvidia-smi
-python non_physics_training.py
+python x02_train_fusion_img_seq_gene.py
 
 ## End-of-job summary, if running as a job
 [[ -n "$JOB_ID" ]] && qstat -j "$JOB_ID"  # This is useful for debugging and usage purposes,
