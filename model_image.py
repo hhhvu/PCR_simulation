@@ -142,6 +142,7 @@ if __name__ == "__main__":
     ## Save curves as images
     ###########################################
 
+    '''
     imgs_folder = 'data/curve_imgs'
 
     for idx in tqdm(range(len(curve_dict.keys()))):
@@ -156,7 +157,8 @@ if __name__ == "__main__":
         # plt.show()
         plt.savefig(f'{imgs_folder}/curve_{curve_idx}.png')
         plt.clf()
-
+    '''
+    
     ###########################################
     ## Set-up data objects
     ###########################################
@@ -181,7 +183,7 @@ if __name__ == "__main__":
     hidden_size = 512
     latent_dim = 512
     num_layers = 3
-    num_epoch = 10
+    num_epoch = 50
 
     model = ImageModel(input_size, hidden_size, latent_dim)
     model.to(device)  # If you are using GPU
@@ -217,7 +219,7 @@ if __name__ == "__main__":
 
         print('Starting epoch', epoch)
         
-        for images, sequences, labels in train_loader:
+        for images, sequences, labels in tqdm(train_loader):
             images = images.to(device)
             sequences, labels = sequences.to(device).unsqueeze(2), labels.to(device)
             
@@ -239,7 +241,7 @@ if __name__ == "__main__":
         val_pred_probs, val_pred_labels, val_true_labels = [], [], []
         
         with torch.no_grad():
-            for images, sequences, labels in val_loader:
+            for images, sequences, labels in tqdm(val_loader):
                 images = images.to(device)
                 sequences, labels = sequences.to(device).unsqueeze(2), labels.to(device)
 
@@ -263,7 +265,9 @@ if __name__ == "__main__":
         # Save model if it's the best so far
         if val_loss < best_val_loss:
             best_val_loss = val_loss
-            torch.save(model.state_dict(), 'output/image_model/best_model_ep10.pth')
+            if not os.path.exists('output/image_model/'):
+                os.makedirs('output/image_model/')
+            torch.save(model.state_dict(), 'output/image_model/best_model_ep50.pth')
             log_model(experiment, model, model_name=f"CurModel_{epoch}")
 
         print(len(val_pred_labels))

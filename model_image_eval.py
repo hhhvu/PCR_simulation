@@ -71,7 +71,7 @@ class ImageSequenceDataset(Dataset):
         #target data retrieval
         target = self.target_df.loc[self.target_df['curve_idx'] == curve_idx, 'groundtruth_target'].values[0]
 
-        return curve_img, sequence_normalized, torch.tensor(target, dtype=torch.long)
+        return curve_idx, curve_img, sequence_normalized, torch.tensor(target, dtype=torch.long)
     
 class ImageModel(nn.Module):
     def __init__(self, input_size, hidden_size, latent_dim):
@@ -247,7 +247,7 @@ if __name__ == "__main__":
     eval_df = pd.read_csv('data/image_val_preds.csv')
     print(eval_df.head(10))
 
-    eval_df['Igi_call_quant'] = eval_df['Igi_call_quant_x']
+    # eval_df['Igi_call_quant'] = eval_df['Igi_call_quant_x']
 
     # Calculate ROC scores
     auc_image = roc_auc_score(eval_df['val_true_labels'],eval_df['val_pred_probs_image'])
