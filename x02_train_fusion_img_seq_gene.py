@@ -161,7 +161,7 @@ print(device)
 
 if __name__ == "__main__":
 
-    MODEL_SAVE_PATH = 'output/10_21_fusion_model_gene'
+    MODEL_SAVE_PATH = 'output/10_21_fusion_model_w_genes'
 
     if not os.path.isdir(MODEL_SAVE_PATH):
         os.makedirs(MODEL_SAVE_PATH)
@@ -249,7 +249,7 @@ if __name__ == "__main__":
     hidden_size = 512
     latent_dim = 512
     num_layers = 3
-    num_epoch = 10
+    num_epoch = 20
     genes = len(target_df['target'].unique())
 
     model = FusionModel(input_size, hidden_size, latent_dim, sequence_length, num_layers=num_layers, genes=genes)
@@ -296,7 +296,6 @@ if __name__ == "__main__":
             images = images.to(device)
             labels = [label.to(device) for label in labels]
             sequences, gene= sequences.to(device).unsqueeze(2), gene.to(device)
-            
             optimizer.zero_grad()
             #outputs = model(images, sequences, gene)
             
@@ -337,17 +336,17 @@ if __name__ == "__main__":
                 val_loss += loss.item() * sequences.size(0)
                 
                 # Assuming threshold of 0.5 for binary classification
-                predicted_labels = (outputs.squeeze() > 0.5).float()
+                predicted_labels = (outputs[0].squeeze() > 0.5).float()
                 
-                loss = criterion(outputs.squeeze(), labels.float())
+                #loss = criterion(outputs.squeeze(), labels.float())
                 val_loss += loss.item() * sequences.size(0)
                 
-                correct_predictions += (predicted_labels == labels.float()).sum().item()
-                total_samples += labels.size(0)
+                correct_predictions += (predicted_labels == labels[0].float()).sum().item()
+                total_samples += labels[0].size(0)
 
-                val_pred_probs.extend(outputs.cpu().numpy())
+                val_pred_probs.extend(outputs[0].cpu().numpy())
                 val_pred_labels.extend(predicted_labels.cpu().numpy())
-                val_true_labels.extend(labels.cpu().numpy())
+                val_true_labels.extend(labels[0].cpu().numpy())
                 
         # Save model if it's the best so far
         if val_loss < best_val_loss:
