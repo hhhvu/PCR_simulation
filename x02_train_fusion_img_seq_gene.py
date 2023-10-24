@@ -1,5 +1,5 @@
-# from comet_ml import Experiment
-# from comet_ml.integration.pytorch import log_model
+from comet_ml import Experiment
+from comet_ml.integration.pytorch import log_model
 
 import torch
 from torch.utils.data import Dataset, DataLoader
@@ -263,14 +263,13 @@ if __name__ == "__main__":
     ## Set up metric logging
     ###########################################
 
-    # experiment = Experiment(
-    #     api_key="7smwpzl0FeZJcESqBITDniX7I",
-    #     project_name="classification-arch-search",
-    #     workspace="pcr-simulation"
-    # )
+    experiment = Experiment(
+        api_key="7smwpzl0FeZJcESqBITDniX7I",
+        project_name="classification-arch-search",
+        workspace="pcr-simulation"
+    )
 
-    # experiment.set_name('ConvLSTM_MetricTest')
-    # experiment.set_name('FusionModel_MetricTest')
+    experiment.set_name('FusionModel_ImgSeqGene')
 
     ###########################################
     ## Training Loop
@@ -292,7 +291,8 @@ if __name__ == "__main__":
 
         print('Starting epoch', epoch)
         
-        for images, sequences, gene, labels in train_loader:
+        for images, sequences, gene, labels in tqdm(train_loader):
+            break
             images = images.to(device)
             labels = [label.to(device) for label in labels]
             sequences, gene= sequences.to(device).unsqueeze(2), gene.to(device)
@@ -321,20 +321,21 @@ if __name__ == "__main__":
         val_pred_probs, val_pred_labels, val_true_labels = [], [], []
         
         with torch.no_grad():
-            for images, sequences, gene, labels in val_loader:
+            for images, sequences, gene, labels in tqdm(val_loader):
                 images = images.to(device)
                 labels = [label.to(device) for label in labels]
                 sequences, gene= sequences.to(device).unsqueeze(2), gene.to(device)
 
                 outputs = model(images, sequences, gene)
+                
                 # Calculate total loss by iterating over outputs and ground truths
                 #loss = torch.sum(criterion(output.squeeze(), y.float()) for output, y in zip(outputs, labels))
-                loss = sum(criterion(output.squeeze(), y.float()) for output, y in zip(outputs, labels))
-
+                loss = torch.sum(criterion(output.squeeze(), y.float()) for output, y in zip(outputs, labels))
+                
                 # loss = criterion(out1.squeeze(), y1) + criterion(out2, y2) + criterion(out3, y3)
                 # loss = criterion(outputs.squeeze(), labels.float())
                 val_loss += loss.item() * sequences.size(0)
-
+                
                 # Assuming threshold of 0.5 for binary classification
                 predicted_labels = (outputs.squeeze() > 0.5).float()
                 
@@ -361,7 +362,7 @@ if __name__ == "__main__":
         #val_true_labels, val_pred_probs = val_true_labels.cpu().numpy(), val_pred_probs.cpu().numpy()
         val_auc = roc_auc_score(val_true_labels, val_pred_probs)
 
-        # experiment.log_metrics({'Validation Accuracy': val_acc, 'Avg Training Loss': avg_train_loss, 'Avg Validation Loss': avg_val_loss, 'Validation AUC': val_auc}, epoch=epoch)
+        experiment.log_metrics({'Validation Accuracy': val_acc, 'Avg Training Loss': avg_train_loss, 'Avg Validation Loss': avg_val_loss, 'Validation AUC': val_auc}, epoch=epoch)
         print(f"Epoch {epoch}, Training Loss: {avg_train_loss}, Validation Loss: {avg_val_loss}, Validation Accuracy: {val_acc}, Validation AUC: {val_auc}")
         val_losses.append(avg_val_loss)
         train_losses.append(avg_train_loss)
