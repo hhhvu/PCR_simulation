@@ -42,7 +42,7 @@ class ImageSequenceGeneDataset(Dataset):
         # Image transformations: Resize and Normalize
         self.img_transforms = transforms.Compose([
             transforms.Lambda(lambda image: image.convert('RGB')),
-            transforms.Resize((128, 128)),  # Resizing to a consistent size
+            transforms.Resize((224, 224)),  # Resizing to a consistent size
             transforms.ToTensor(),  # Convert PIL image to tensor
             transforms.Normalize((0.5,), (0.5,))  # Normalizing to [0,1]
             ])
@@ -94,11 +94,9 @@ class FusionModel(nn.Module):
 
         self.latent_dim = latent_dim
         
-        # Image processing via EfficientNet_V2_L
-        # TODO change to true
-        self.effnet = models.efficientnet_v2_l(pretrained=True)
-        num_ftrs = self.effnet.classifier[1].in_features
-        self.effnet.classifier = nn.Linear(num_ftrs, self.latent_dim)  # Adjusting to output a 512-dimensional 
+        self.vit = models.vit_b_32(weights='IMAGENET1K_V1')
+        num_ftrs = self.vit.num_classes
+        self.vit_classifier = nn.Linear(num_ftrs, self.latent_dim)  # Adjusting to output a 512-dimensional 
 
         # Sequence processing via LSTM
         self.lstm = nn.LSTM(input_size, hidden_size, num_layers, batch_first=True)
@@ -130,7 +128,7 @@ class FusionModel(nn.Module):
 
     def forward(self, image, sequence, genes):
         # Image processing
-        img_latent = self.effnet(image)
+        img_latent = self.vit_classifier(self.vit(image))
 
         # Sequence processing
         lstm_out, _ = self.lstm(sequence)
@@ -248,11 +246,8 @@ if __name__ == "__main__":
     genes = len(target_df['target'].unique())
 
     model = FusionModel(input_size, hidden_size, latent_dim, sequence_length, num_layers=num_layers, genes=genes)
-    # model = ConvLSTM(input_size=input_size, conv_out_channels=32, kernel_size=3, hidden_size=50, output_size=2, seq_len=seq_len)
     model.to(device)  # If you are using GPU
 
-    # model = nn.Sequential(resnet18(), nn.Flatten(), nn.Linear(200, 2))
-    # model.to(device)
 
     ###########################################
     ## Set up metric logging
@@ -264,13 +259,13 @@ if __name__ == "__main__":
         workspace="pcr-simulation"
     )
 
-    experiment.set_name('FusionModel_ImgSeqGene_lr1e-5_ep50')
+    experiment.set_name('FusionModel_ViT32_ImgSeqGene_lr1e-5_ep50')
 
     ###########################################
     ## Training Loop
     ###########################################
 
-    MODEL_SAVE_PATH = 'output/10_23_fusion_model_w_genes_lr1e-5_ep50'
+    MODEL_SAVE_PATH = 'output/10_23_fusion_model_vit_lr1e-5_ep50'
 
     if not os.path.isdir(MODEL_SAVE_PATH):
         os.makedirs(MODEL_SAVE_PATH)
