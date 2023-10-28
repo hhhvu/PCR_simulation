@@ -89,10 +89,11 @@ class ImageSequenceGeneDataset(Dataset):
         return curve_img, sequence_normalized, gene_type, vector
 
 class FusionModel(nn.Module):
-    def __init__(self, input_size, hidden_size, latent_dim, sequence_length, num_layers=5, genes = 6, num_heads=3):
+    def __init__(self, input_size, hidden_size, latent_dim, sequence_length, num_layers=5, genes = 6, num_heads=3, delta=16):
         super(FusionModel, self).__init__()
 
         self.latent_dim = latent_dim
+        self.delta = delta
         
         self.vit = models.vit_b_32(weights='IMAGENET1K_V1')
         num_ftrs = self.vit.num_classes
@@ -106,7 +107,7 @@ class FusionModel(nn.Module):
         self.lstm_fc = nn.Linear(hidden_size, self.latent_dim)
 
         # Caluclate neural_net input size after appending genes
-        neural_net_input = self.latent_dim*2 + genes
+        neural_net_input = self.latent_dim*2 + genes + delta
 
         # Fusion of image and sequence representations
         self.fc = nn.Sequential(
@@ -134,8 +135,12 @@ class FusionModel(nn.Module):
         lstm_out, _ = self.lstm(sequence)
         seq_latent = self.lstm_fc(lstm_out[:, -1, :])  # Taking the last output from LSTM for the whole sequence
 
+        # Calculating delta
+        delta_latent = torch.max(sequence, dim=1)[0] - torch.min(sequence, dim=1)[0]
+        delta_latent = delta_latent.expand((-1, self.delta))
+
         # Fusion
-        fusion = torch.cat((img_latent, seq_latent, genes.squeeze(1)), dim=1)
+        fusion = torch.cat((img_latent, seq_latent, genes.squeeze(1), delta_latent), dim=1)
         output = self.fc(fusion)
 
         # Get predictions for each head
@@ -244,8 +249,9 @@ if __name__ == "__main__":
     num_layers = 3
     num_epoch = 50
     genes = len(target_df['target'].unique())
+    delta_size = 512
 
-    model = FusionModel(input_size, hidden_size, latent_dim, sequence_length, num_layers=num_layers, genes=genes)
+    model = FusionModel(input_size, hidden_size, latent_dim, sequence_length, num_layers=num_layers, genes=genes, delta=delta_size)
     model.to(device)  # If you are using GPU
 
 
@@ -259,20 +265,20 @@ if __name__ == "__main__":
         workspace="pcr-simulation"
     )
 
-    experiment.set_name('FusionModel_ViT32_ImgSeqGene_lr1e-5_ep50')
+    experiment.set_name('FusionModel_ViT32_ImgSeqGene_delta512')
 
     ###########################################
     ## Training Loop
     ###########################################
 
-    MODEL_SAVE_PATH = 'output/10_23_fusion_model_vit_lr1e-5_ep50'
+    MODEL_SAVE_PATH = 'output/10_27_fusion_model_vit_delta512'
 
     if not os.path.isdir(MODEL_SAVE_PATH):
         os.makedirs(MODEL_SAVE_PATH)
 
     #criterion = nn.CrossEntropyLoss()
     criterion = nn.BCELoss()  # Binary cross-entropy loss
-    optimizer = optim.Adam(model.parameters(), lr=0.00001)
+    optimizer = optim.Adam(model.parameters(), lr=0.0001)
 
     best_val_loss = float('inf')
 
@@ -291,9 +297,8 @@ if __name__ == "__main__":
             labels = [label.to(device) for label in labels]
             sequences, gene= sequences.to(device).unsqueeze(2), gene.to(device)
             optimizer.zero_grad()
-            #outputs = model(images, sequences, gene)
-            
             outputs = model(images, sequences, gene)
+            
             # Calculate total loss by iterating over outputs and ground truths
             loss = sum(criterion(output.squeeze(), y.float()) for output, y in zip(outputs, labels))
 
