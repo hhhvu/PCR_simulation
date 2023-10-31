@@ -102,12 +102,17 @@ class FusionModel(nn.Module):
         # Sequence processing via LSTM
         self.lstm = nn.LSTM(input_size, hidden_size, num_layers, batch_first=True)
         self.hidden_state = (torch.zeros(num_layers, sequence_length, hidden_size), torch.zeros(num_layers, sequence_length, hidden_size))
-        
         # Final fully connected layer to ensure the LSTM output has a size of 512
         self.lstm_fc = nn.Linear(hidden_size, self.latent_dim)
 
+        # Delta Sequence processing via LSTM
+        self.lstm_delta = nn.LSTM(input_size-1, hidden_size, num_layers, batch_first=True)
+        self.hidden_state_delta = (torch.zeros(num_layers, sequence_length-1, hidden_size), torch.zeros(num_layers, sequence_length-1, hidden_size))
+        # Final fully connected layer to ensure the LSTM output has a size of 512
+        self.lstm_fc_delta = nn.Linear(hidden_size, self.latent_dim)
+
         # Caluclate neural_net input size after appending genes
-        neural_net_input = self.latent_dim*2 + genes + delta
+        neural_net_input = self.latent_dim*2 + genes + (self.latent_dim-1)
 
         # Fusion of image and sequence representations
         self.fc = nn.Sequential(
@@ -136,11 +141,14 @@ class FusionModel(nn.Module):
         seq_latent = self.lstm_fc(lstm_out[:, -1, :])  # Taking the last output from LSTM for the whole sequence
 
         # Calculating delta
-        delta_latent = torch.max(sequence, dim=1)[0] - torch.min(sequence, dim=1)[0]
-        delta_latent = delta_latent.expand((-1, self.delta))
+        # delta_latent = torch.max(sequence, dim=1)[0] - torch.min(sequence, dim=1)[0]
+        # delta_latent = delta_latent.expand((-1, self.delta))
+        delta_seq = sequence[:, 1:] - sequence[:, :-1] #taking first difference
+        lstm_out_delta, _ = self.lstm_delta(delta_seq)
+        seq_latent_delta = self.lstm_fc_delta(lstm_out_delta[:, -1, :])  # Taking the last output from LSTM for the whole sequence
 
         # Fusion
-        fusion = torch.cat((img_latent, seq_latent, genes.squeeze(1), delta_latent), dim=1)
+        fusion = torch.cat((img_latent, seq_latent, genes.squeeze(1), seq_latent_delta), dim=1)
         output = self.fc(fusion)
 
         # Get predictions for each head
