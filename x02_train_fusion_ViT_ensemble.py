@@ -21,6 +21,8 @@ from PIL import Image
 from torchvision import models 
 from torchvision.models import resnet18
 
+from x02_train_fusion_ViT_img_seq_gene import FusionModel
+
 class ImageSequenceGeneDataset(Dataset):
     def __init__(self, curve_dict, target_df,img_directory = 'data/curve_imgs/', train=True, sequence_len=40, 
                  mean=0, std=1):
@@ -79,82 +81,22 @@ class ImageSequenceGeneDataset(Dataset):
         #target data retrieval
         # Extract values from the dataframe
         target = torch.tensor(row['groundtruth_target'].values[0], dtype=torch.long)
-        igi_fp = torch.tensor(row['igi_fp'].values[0], dtype=torch.long)
-        igi_fn = torch.tensor(row['igi_fn'].values[0], dtype=torch.long)
-
-        # Create a 3-dimensional vector
-        vector = [target, igi_fp, igi_fn]
-        #target = self.target_df.loc[self.target_df['curve_idx'] == curve_idx, 'groundtruth_target'].values[0]
-
-        return curve_img, sequence_normalized, gene_type, vector
-
-class FusionModel(nn.Module):
-    def __init__(self, input_size, hidden_size, latent_dim, sequence_length, num_layers=5, genes = 6, num_heads=3, delta=16):
-        super(FusionModel, self).__init__()
-
-        self.latent_dim = latent_dim
-        self.delta = delta
+        igi_call = torch.tensor(row['Igi_call_quant'].values[0], dtype=torch.long)
         
-        self.vit = models.vit_b_32(weights='IMAGENET1K_V1')
-        num_ftrs = self.vit.num_classes
-        self.vit_classifier = nn.Linear(num_ftrs, self.latent_dim)  # Adjusting to output a 512-dimensional 
+        return curve_img, sequence_normalized, gene_type, igi_call, target
 
-        # Sequence processing via LSTM
-        self.lstm = nn.LSTM(input_size, hidden_size, num_layers, batch_first=True)
-        self.hidden_state = (torch.zeros(num_layers, sequence_length, hidden_size), torch.zeros(num_layers, sequence_length, hidden_size))
-        # Final fully connected layer to ensure the LSTM output has a size of 512
-        self.lstm_fc = nn.Linear(hidden_size, self.latent_dim)
+class EnsembleModel(nn.Module):
+    def __init__(self, fusion):
+        super(EnsembleModel, self).__init__()
+        self.fusion = fusion
+        self.fc = nn.Linear(4, 1)
 
-        # Delta Sequence processing via LSTM
-        self.lstm_delta = nn.LSTM(input_size, hidden_size, num_layers, batch_first=True)
-        self.hidden_state_delta = (torch.zeros(num_layers, sequence_length-1, hidden_size), torch.zeros(num_layers, sequence_length-1, hidden_size))
-        # Final fully connected layer to ensure the LSTM output has a size of 512
-        self.lstm_fc_delta = nn.Linear(hidden_size, self.latent_dim)
+    def forward(self, image, sequence, genes, igi_call):
+        x = self.fusion(image, sequence, genes)
+        x = torch.cat(x + [igi_call.view(-1, 1)], dim=1)
+        x = torch.sigmoid(self.fc(x))
+        return x
 
-        # Caluclate neural_net input size after appending genes
-        neural_net_input = self.latent_dim*3 + genes
-
-        # Fusion of image and sequence representations
-        self.fc = nn.Sequential(
-            nn.Linear(neural_net_input, 512),  # Concatenated vectors are of size 1024 (512 from image + 512 from sequence)
-            nn.ReLU(),
-            nn.Linear(512, 256),
-            nn.ReLU(),
-            nn.Linear(256, 128),
-            nn.ReLU(),
-            nn.Linear(128, 64),
-            nn.ReLU()
-            # nn.Linear(64, 1),
-            # nn.Sigmoid()
-        )
-
-        # Prediction heads
-        self.heads = nn.ModuleList([nn.Linear(64, 1) for _ in range(num_heads)])
-
-
-    def forward(self, image, sequence, genes):
-        # Image processing
-        img_latent = self.vit_classifier(self.vit(image))
-
-        # Sequence processing
-        lstm_out, _ = self.lstm(sequence)
-        seq_latent = self.lstm_fc(lstm_out[:, -1, :])  # Taking the last output from LSTM for the whole sequence
-
-        # Calculating delta
-        # delta_latent = torch.max(sequence, dim=1)[0] - torch.min(sequence, dim=1)[0]
-        # delta_latent = delta_latent.expand((-1, self.delta))
-        delta_seq = sequence[:, 1:] - sequence[:, :-1] #taking first difference
-        lstm_out_delta, _ = self.lstm_delta(delta_seq)
-        seq_latent_delta = self.lstm_fc_delta(lstm_out_delta[:, -1, :])  # Taking the last output from LSTM for the whole sequence
-
-        # Fusion
-        fusion = torch.cat((img_latent, seq_latent, genes.squeeze(1), seq_latent_delta), dim=1)
-        output = self.fc(fusion)
-
-        # Get predictions for each head
-        outputs = [torch.sigmoid(head(output)) for head in self.heads]
-
-        return outputs
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 print(torch.version.cuda)
@@ -209,23 +151,6 @@ if __name__ == "__main__":
     norm_std = np.array(std_list).mean().item()
 
     ###########################################
-    ## Save curves as images
-    ###########################################
-
-    # for idx in  tqdm(range(len(curve_dict.keys()))):
-    #     curve_idx = list(curve_dict.keys())[idx]
-    #     sequence = curve_dict[curve_idx][:40]
-
-    #     if not os.path.exists('data/curve_imgs_axis/'):
-    #         os.makedirs('data/curve_imgs_axis/')
-    #     plt.plot(sequence, linewidth=6)
-    #     #plt.axis('off')  # This will turn off the axis labels and ticks
-    #     plt.axis('on') 
-    #     plt.show()
-    #     plt.savefig(f'data/curve_imgs_axis/curve_{curve_idx}.png')
-    #     plt.clf()
-
-    ###########################################
     ## Set-up data objects
     ###########################################
 
@@ -257,9 +182,11 @@ if __name__ == "__main__":
     num_layers = 3
     num_epoch = 50
     genes = len(target_df['target'].unique())
-    delta_size = 512
+    delta_size = 64
 
-    model = FusionModel(input_size, hidden_size, latent_dim, sequence_length, num_layers=num_layers, genes=genes, delta=delta_size)
+    fusion = FusionModel(input_size, hidden_size, latent_dim, sequence_length, num_layers=num_layers, genes=genes, delta=delta_size)
+    # fusion.load_state_dict(torch.load('output/10_27_fusion_model_vit_delta64/best_model_no_pretrain.pth'))
+    model = EnsembleModel(fusion)
     model.to(device)  # If you are using GPU
 
 
@@ -273,13 +200,13 @@ if __name__ == "__main__":
         workspace="pcr-simulation"
     )
 
-    experiment.set_name('FusionModel_ViT32_ImgSeqGene_delta64new')
+    experiment.set_name('EnsembleModel_ViT32_delta')
 
     ###########################################
     ## Training Loop
     ###########################################
 
-    MODEL_SAVE_PATH = 'output/10_31_fusion_model_vit_delta64new'
+    MODEL_SAVE_PATH = 'output/10_31_ensemble_model_vit_delta'
 
     if not os.path.isdir(MODEL_SAVE_PATH):
         os.makedirs(MODEL_SAVE_PATH)
@@ -300,18 +227,16 @@ if __name__ == "__main__":
 
         print('Starting epoch', epoch)
         
-        for images, sequences, gene, labels in tqdm(train_loader):
+        for images, sequences, gene, igi_call, labels in tqdm(train_loader):
             images = images.to(device)
-            labels = [label.to(device) for label in labels]
+            labels = labels.to(device)
+            igi_call = igi_call.to(device)
             sequences, gene= sequences.to(device).unsqueeze(2), gene.to(device)
             optimizer.zero_grad()
-            outputs = model(images, sequences, gene)
+            outputs = model(images, sequences, gene, igi_call)
             
             # Calculate total loss by iterating over outputs and ground truths
-            loss = sum(criterion(output.squeeze(), y.float()) for output, y in zip(outputs, labels))
-
-            #loss = torch.sum(torch.tensor([criterion(output.squeeze(), y.float()) for output, y in zip(outputs, labels)]))
-            #loss = criterion(outputs.squeeze(), labels.float())
+            loss = criterion(outputs.squeeze(), labels.float())
 
             loss.backward()
             optimizer.step()
@@ -327,39 +252,33 @@ if __name__ == "__main__":
         val_pred_probs, val_pred_labels, val_true_labels = [], [], []
         
         with torch.no_grad():
-            for images, sequences, gene, labels in tqdm(val_loader):
+            for images, sequences, gene, igi_call, labels in tqdm(val_loader):
                 images = images.to(device)
-                labels = [label.to(device) for label in labels]
+                labels = labels.to(device)
+                igi_call = igi_call.to(device)
                 sequences, gene= sequences.to(device).unsqueeze(2), gene.to(device)
 
-                outputs = model(images, sequences, gene)
+                outputs = model(images, sequences, gene, igi_call)
                 
                 # Calculate total loss by iterating over outputs and ground truths
-                #loss = torch.sum(criterion(output.squeeze(), y.float()) for output, y in zip(outputs, labels))
-                loss = sum(criterion(output.squeeze(), y.float()) for output, y in zip(outputs, labels))
+                loss = criterion(outputs.squeeze(), labels.float())
                 
-                # loss = criterion(out1.squeeze(), y1) + criterion(out2, y2) + criterion(out3, y3)
-                # loss = criterion(outputs.squeeze(), labels.float())
                 val_loss += loss.item() * sequences.size(0)
                 
                 # Assuming threshold of 0.5 for binary classification
-                predicted_labels = (outputs[0].squeeze() > 0.5).float()
+                predicted_labels = (outputs.squeeze() > 0.5).float()
                 
-                #loss = criterion(outputs.squeeze(), labels.float())
-                val_loss += loss.item() * sequences.size(0)
-                
-                correct_predictions += (predicted_labels == labels[0].float()).sum().item()
-                total_samples += labels[0].size(0)
+                correct_predictions += (predicted_labels == labels.float()).sum().item()
+                total_samples += labels.size(0)
 
-                val_pred_probs.extend(outputs[0].cpu().numpy())
+                val_pred_probs.extend(outputs.cpu().numpy())
                 val_pred_labels.extend(predicted_labels.cpu().numpy())
-                val_true_labels.extend(labels[0].cpu().numpy())
+                val_true_labels.extend(labels.cpu().numpy())
                 
         # Save model if it's the best so far
         if val_loss < best_val_loss:
             best_val_loss = val_loss
             torch.save(model.state_dict(), f'{MODEL_SAVE_PATH}/best_model_no_pretrain.pth')
-            # log_model(experiment, model, model_name=f"CurModel_{epoch}")
 
         print(len(val_pred_labels))
         print(len(val_true_labels))
