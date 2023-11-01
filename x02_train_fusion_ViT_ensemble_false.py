@@ -81,9 +81,10 @@ class ImageSequenceGeneDataset(Dataset):
         #target data retrieval
         # Extract values from the dataframe
         target = torch.tensor(row['groundtruth_target'].values[0], dtype=torch.long)
-        igi_call = torch.tensor(row['igi_fn'].values[0], dtype=torch.long)
+        igi_call = torch.tensor(row['Igi_call_quant'].values[0], dtype=torch.long)
+        igi_false = torch.tensor(row['igi_fp'].values[0], dtype=torch.long)
         
-        return curve_img, sequence_normalized, gene_type, igi_call, target
+        return curve_img, sequence_normalized, gene_type, igi_call, igi_false
 
 class EnsembleModel(nn.Module):
     def __init__(self, fusion):
@@ -200,13 +201,13 @@ if __name__ == "__main__":
         workspace="pcr-simulation"
     )
 
-    experiment.set_name('EnsembleModel_ViT32_fn_delta')
+    experiment.set_name('EnsembleModel_ViT32_fp')
 
     ###########################################
     ## Training Loop
     ###########################################
 
-    MODEL_SAVE_PATH = 'output/10_31_ensemble_model_vit_fn_delta'
+    MODEL_SAVE_PATH = 'output/10_31_ensemble_model_vit_fp'
 
     if not os.path.isdir(MODEL_SAVE_PATH):
         os.makedirs(MODEL_SAVE_PATH)
@@ -227,16 +228,16 @@ if __name__ == "__main__":
 
         print('Starting epoch', epoch)
         
-        for images, sequences, gene, igi_call, labels in tqdm(train_loader):
+        for images, sequences, gene, igi_call, igi_false in tqdm(train_loader):
             images = images.to(device)
-            labels = labels.to(device)
+            igi_false = igi_false.to(device)
             igi_call = igi_call.to(device)
             sequences, gene= sequences.to(device).unsqueeze(2), gene.to(device)
             optimizer.zero_grad()
             outputs = model(images, sequences, gene, igi_call)
             
             # Calculate total loss by iterating over outputs and ground truths
-            loss = criterion(outputs.squeeze(), labels.float())
+            loss = criterion(outputs.squeeze(), igi_false.float())
 
             loss.backward()
             optimizer.step()
@@ -252,28 +253,28 @@ if __name__ == "__main__":
         val_pred_probs, val_pred_labels, val_true_labels = [], [], []
         
         with torch.no_grad():
-            for images, sequences, gene, igi_call, labels in tqdm(val_loader):
+            for images, sequences, gene, igi_call, igi_false in tqdm(val_loader):
                 images = images.to(device)
-                labels = labels.to(device)
+                igi_false = igi_false.to(device)
                 igi_call = igi_call.to(device)
                 sequences, gene= sequences.to(device).unsqueeze(2), gene.to(device)
 
                 outputs = model(images, sequences, gene, igi_call)
                 
                 # Calculate total loss by iterating over outdputs and ground truths
-                loss = criterion(outputs.squeeze(), labels.float())
+                loss = criterion(outputs.squeeze(), igi_false.float())
                 
                 val_loss += loss.item() * sequences.size(0)
                 
                 # Assuming threshold of 0.5 for binary classification
                 predicted_labels = (outputs.squeeze() > 0.5).float()
                 
-                correct_predictions += (predicted_labels == labels.float()).sum().item()
-                total_samples += labels.size(0)
+                correct_predictions += (predicted_labels == igi_false.float()).sum().item()
+                total_samples += igi_false.size(0)
 
                 val_pred_probs.extend(outputs.cpu().numpy())
                 val_pred_labels.extend(predicted_labels.cpu().numpy())
-                val_true_labels.extend(labels.cpu().numpy())
+                val_true_labels.extend(igi_false.cpu().numpy())
                 
         # Save model if it's the best so far
         if val_loss < best_val_loss:
