@@ -7,6 +7,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import io, os
 from tqdm import tqdm
+import time
 
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import roc_auc_score
@@ -14,7 +15,7 @@ from sklearn.preprocessing import KBinsDiscretizer
 import statsmodels.api as sm
 
 # Define a function to conduct logistic regression and report results
-def run_logistic_regression(df, features, target, eval_df=None, eval_feats=None):
+def run_logistic_regression(df, features, target, eval_df=None, eval_feats=None, save_eval_df=False):
     print(df.shape)
     relevant = features + [target]
     reldf = df[relevant]
@@ -57,6 +58,13 @@ def run_logistic_regression(df, features, target, eval_df=None, eval_feats=None)
         y = np.array(df2[target])
 
         y_prob = model.predict(sm.add_constant(X))
+
+        if save_eval_df:
+            name = f"{target}_pred"
+            eval_df[name] = y_prob
+            time_now = time.time()
+            eval_df.to_csv(f"test_set_{target}_preds_{time_now}.csv")
+
         auc = roc_auc_score(y, y_prob)
         print(f"AUC on test set: {auc:.4f}\n")
 
