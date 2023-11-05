@@ -1,28 +1,26 @@
 # Added my dispatcher from before 
 
 import argparse
+import time
 import json
 import random
 import os, subprocess
+import numpy as np
 from csv import DictWriter
 import multiprocessing
-from vectorizer import Vectorizer
-from logistic_regression import LogisticRegression
-from main import load_data
 from sklearn.metrics import roc_auc_score
 
-import numpy as np
 
 #Run scripts
-# python dispatcher.py --config_path grid_search.json --num_workers 5 --log_dir logs_v2 --grid_search_results_path grid_results_q1_2_v2.csv
-# python dispatcher.py --config_path grid_search_abla.json --num_workers 50 --log_dir logs_abla --grid_search_results_path grid_results_q1_2_abla.csv
-# python dispatcher.py --config_path grid_search_abla.json --num_workers 75 --log_dir logs_abla_mulcov --grid_search_results_path grid_results_q1_3_abla_mulcov_v2.csv
+# python scripts/dispatcher.py --config_path configs/toy_mlp_sweep.json --num_workers 4
+# python scripts/dispatcher.py --config_path configs/toy_resnet_sweep.json --num_workers 4
+# python scripts/dispatcher.py --config_path configs/toy_cnn_sweep.json --num_workers 4
 
 def add_main_args(parser: argparse.ArgumentParser) -> argparse.ArgumentParser:
     parser.add_argument(
         "--config_path",
         type=str,
-        default="grid_search.json",
+        default="configs/toy_mlp_sweep.json",
         help="Location of config file"
     )
 
@@ -46,9 +44,15 @@ def add_main_args(parser: argparse.ArgumentParser) -> argparse.ArgumentParser:
         help="Where to save grid search results"
     )
 
+    parser.add_argument(
+        "--experiment_name",
+        default="grid_search",
+        help="How to name the experiments in wandb"
+    )
+
     return parser
 
-def get_experiment_list(config: dict) -> (list(dict)):
+def get_experiment_list(config: dict):
     '''
     Parses an experiment config, and creates jobs. For flags that are expected to be a single item, but the config contains a list, this will return one job for each item in the list.
     :config - experiment_config
@@ -92,66 +96,30 @@ def worker(args: argparse.Namespace, job_queue: multiprocessing.Queue, done_queu
         done_queue.put(
             launch_experiment(args, params))
 
+
+# returns: flags for this experiment as well as result metrics
 def launch_experiment(args: argparse.Namespace, experiment_config: dict) ->  dict:
     '''
-    Launch an experiment and direct logs and results to a unique filepath.
-    :configs: flags to use for this model run. Will be fed into
-    scripts/main.py
-
-    returns: flags for this experiment as well as result metrics
+    Launch an experiment and direct results to wandb
+    :configs: flags to use for this model run. Will be fed into scripts/main.py
     '''
 
     if not os.path.isdir(args.log_dir):
         os.makedirs(args.log_dir)
 
     # The command to run the script
-    lr, lamb, batch, epo = experiment_config['learning_rate'], experiment_config['regularization_lambda'], experiment_config['batch_size'], experiment_config['num_epochs']
-    results_path = f'{args.log_dir}/results_{lr}_{lamb}_{batch}_{epo}_ablation.json'
-    command = ['python', 'main.py', '--learning_rate', str(lr), '--regularization_lambda', str(lamb), '--batch_size', str(batch), '--num_epochs', str(epo), '--results_path', results_path]
+    command = ['python', 'scripts/main.py', '--train']
+
+    unique_suffix = str(int(time.time()))  # Using timestamp
+    experiment_name = f"{unique_suffix}"
+    model_name = experiment_config['main.model_name']
+    for key, value in experiment_config.items():
+        arg_key = key.split('.')[-1] if key.startswith('main.') else key
+        command.extend(['--' + arg_key, str(value)])
+    command.extend(['--experiment_name', model_name + '_' + experiment_name])
 
     # Run the command and capture the output
-    try:
-        results = subprocess.run(command, stdout=subprocess.PIPE)
-
-        # Print the output
-        #print(results.stdout.decode('utf-8'))
-
-        # TODO: Parse the results from the experiment and return them as a dict
-        with open(results_path, 'r') as file:
-            results = json.load(file)
-        
-        experiment_config['coefficient'] = results['coefficient'][0]
-        experiment_config['train_auc'] = results['train_auc']
-        experiment_config['val_auc'] = results['val_auc']
-        experiment_config['train_loss'] = results['train_losses'][-1]
-        experiment_config['val_loss'] = results['val_losses'][-1]
-
-        results = experiment_config
-        print('########## Experiment results ##########')
-        print(results['regularization_lambda'])
-        print(results['num_epochs'])
-        print(results['coefficient'])
-        print(results['train_loss'])
-        print(results['train_auc'])
-        print(results['val_auc'])
-    except Exception as e:
-        experiment_config['coefficient'] =  float("NaN")
-        experiment_config['train_auc'] =  float("NaN")
-        experiment_config['val_auc'] =  float("NaN")
-        experiment_config['train_loss'] =  float("NaN")
-        experiment_config['val_loss'] =  float("NaN")
-
-        results = experiment_config
-        print('########## Experiment results ##########')
-        print(results['regularization_lambda'])
-        print(results['num_epochs'])
-        print(results['coefficient'])
-        print(results['train_loss'])
-        print(results['train_auc'])
-        print(results['val_auc'])
-
-    return results
-
+    subprocess.run(command, stdout=subprocess.PIPE)
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
@@ -179,21 +147,11 @@ def main(args: argparse.Namespace) -> dict:
 
     # TODO: Define worker fn to launch an experiment as a separate process.
     for _ in range(args.num_workers):
-        multiprocessing.Process(target=worker, args=(args, job_queue, done_queue)).start()
-
-    # Accumualte results into a list of dicts
-    grid_search_results = []
-    for _ in range(len(experiments)):
-        grid_search_results.append(done_queue.get())
-
-    keys = grid_search_results[0].keys()
-
-    print("Saving results to {}".format(args.grid_search_results_path))
-
-    writer = DictWriter(open(args.grid_search_results_path, 'w'), keys)
-    writer.writeheader()
-    writer.writerows(grid_search_results)
-
+        process = multiprocessing.Process(target=worker, args=(args, job_queue, done_queue)).start()
+        # TO DELETE: changes for mac
+        # process.start()
+        # process.join()
+    
     print("Done")
 
 if __name__ == '__main__':
