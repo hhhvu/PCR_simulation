@@ -60,7 +60,7 @@ def add_main_args(parser: LightningArgumentParser) -> LightningArgumentParser:
 
     parser.add_argument(
         "--monitor_key",
-        default="val_loss",
+        default="val_acc",
         help="Name of metric to use for checkpointing. (e.g. val_loss, val_acc)"
     )
 
@@ -106,7 +106,7 @@ def main(args: argparse.Namespace):
     # args.dataset_name.batch_size = args.batch_size
 
     dataset_args = vars(args[args.dataset_name])
-    dataset_args['use_data_augmentation'] = bool(args.use_data_augmentation)
+    # dataset_args['use_data_augmentation'] = bool(args.use_data_augmentation)
     dataset_args['batch_size'] = int(args.batch_size)
     dataset_args['curve_dict_path'] = 'data/groundtruth_df_curve_dict_split_v2.pkl'
     dataset_args['target_df_path'] = 'data/groundtruth_df_target_data_split_v2.csv'

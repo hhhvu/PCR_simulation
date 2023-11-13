@@ -5,7 +5,7 @@ from torchvision import transforms
 import math
 import numpy as np
 import json
-import tqdm
+from tqdm import tqdm
 import os
 import pickle as pkl
 import pandas as pd
@@ -46,6 +46,12 @@ class ImageSequenceDataModule(pl.LightningDataModule):
 
         self.train = ImageSequenceDataset(self.curve_dict_train, self.target_df_train, mean=norm_mean, std=norm_std)
         self.val = ImageSequenceDataset(self.curve_dict_val, self.target_df_val, mean=norm_mean, std=norm_std)
+
+    def prepare_data(self):
+        return
+
+    def setup(self, stage=None):
+        return
 
     def train_dataloader(self):
         return DataLoader(self.train, batch_size=self.batch_size, shuffle=True)

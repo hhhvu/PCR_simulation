@@ -95,7 +95,7 @@ class FusionModel(Classifier):
     """
         Model that takes in sequence and image data and outputs single prediction head.
     """
-    def __init__(self, input_size, hidden_size, latent_dim, sequence_length, num_layers=5, init_lr=1e-4):
+    def __init__(self, input_size=1, hidden_size=512, latent_dim=512, sequence_length=40, num_layers=5, init_lr=1e-4):
         super().__init__(num_classes=2, init_lr=init_lr)
         self.save_hyperparameters()
 
@@ -105,6 +105,7 @@ class FusionModel(Classifier):
         # TODO change to true
         self.effnet = models.efficientnet_v2_l(pretrained=True)
         num_ftrs = self.effnet.classifier[1].in_features
+
         self.effnet.classifier = nn.Linear(num_ftrs, self.latent_dim)  # Adjusting to output a 512-dimensional 
 
         # Sequence processing via LSTM
