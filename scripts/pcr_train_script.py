@@ -2,11 +2,13 @@
 import argparse
 import sys
 from os.path import dirname, realpath
+import torch
 
 sys.path.append(dirname(dirname(realpath(__file__))))
 from src.pcr_lightning import FusionModel, GeneFusionModel, GeneEnsembleModel
 from src.pcr_dataset import ImageSequenceDataModule, ImageSequenceGeneDataModule
 from lightning.pytorch.cli import LightningArgumentParser
+from lightning.pytorch.accelerators import find_usable_cuda_devices
 import lightning.pytorch as pl
 
 NAME_TO_MODEL_CLASS = {
@@ -25,6 +27,8 @@ NAME_TO_DATASET_CLASS = {
 # conda create -n cph_200a python=3.10
 # python scripts/main.py --project_name cornerstone_mlp --train --trainer.max_epochs 100
 # python scripts/main.py --project_name cornerstone_cnn --train --trainer.max_epochs 100 --cnn.use_bn True --use_data_augmentation True --batch_size 256 --model_name "cnn" --project_name "cornerstone-cnn" --cnn.num_layers 4
+
+# CUDA_VISIBLE_DEVICES=0 python scripts/pcr_train_script.py --project_name pcr-classification --experiment_name FusionModel_Test --train --trainer.max_epochs 10
 
 def add_main_args(parser: LightningArgumentParser) -> LightningArgumentParser:
 
@@ -124,11 +128,13 @@ def main(args: argparse.Namespace):
     print("Initializing trainer")
     logger = pl.loggers.WandbLogger(project=args.project_name, 
                                     name = args.experiment_name,
-                                    entity="test_entity")
+                                    entity="saselvan")
 
     args.trainer.accelerator = 'auto'
     args.trainer.logger = logger
     args.trainer.precision = "bf16-mixed" ## This mixed precision training is highly recommended
+
+    args.devices = find_usable_cuda_devices(1)
 
     args.trainer.callbacks = [
         pl.callbacks.ModelCheckpoint(
@@ -151,6 +157,10 @@ def main(args: argparse.Namespace):
 
     print("Done")
 
+device = "cuda" if torch.cuda.is_available() else "cpu"
+print(torch.version.cuda)
+print(torch.__version__)
+print(device)
 
 if __name__ == '__main__':
     __spec__ = None

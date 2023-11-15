@@ -17,7 +17,7 @@ class ImageSequenceDataModule(pl.LightningDataModule):
         data augmentation.
     """
     def __init__(self, curve_dict_path, target_df_path, batch_size=32, shuffle=True):
-
+        super().__init__()
         self.batch_size = batch_size
         self.shuffle = shuffle
 
@@ -41,23 +41,21 @@ class ImageSequenceDataModule(pl.LightningDataModule):
             mean_list.append(mean_curve)
             std_list.append(std_curve)
 
-        norm_mean = np.array(mean_list).mean().item()
-        norm_std = np.array(std_list).mean().item()
-
-        self.train = ImageSequenceDataset(self.curve_dict_train, self.target_df_train, mean=norm_mean, std=norm_std)
-        self.val = ImageSequenceDataset(self.curve_dict_val, self.target_df_val, mean=norm_mean, std=norm_std)
+        self.norm_mean = np.array(mean_list).mean().item()
+        self.norm_std = np.array(std_list).mean().item()
 
     def prepare_data(self):
         return
 
     def setup(self, stage=None):
-        return
+        self.train = ImageSequenceDataset(self.curve_dict_train, self.target_df_train, mean=self.norm_mean, std=self.norm_std)
+        self.val = ImageSequenceDataset(self.curve_dict_val, self.target_df_val, mean=self.norm_mean, std=self.norm_std)
 
     def train_dataloader(self):
         return DataLoader(self.train, batch_size=self.batch_size, shuffle=True)
 
     def val_dataloader(self):
-        return DataLoader(self.val, batch_size=self.batch_size, shuffle=True)
+        return DataLoader(self.val, batch_size=self.batch_size, shuffle=False)
 
 class ImageSequenceDataset(Dataset):
     def __init__(self, curve_dict, target_df, img_directory = 'data/curve_imgs/', sequence_len=40, 
@@ -101,7 +99,10 @@ class ImageSequenceDataset(Dataset):
         sequence = torch.tensor(sequence, dtype=torch.float32)
         sequence_normalized = (sequence - torch.tensor(self.mean, dtype=torch.float32)) / torch.tensor(self.std, dtype=torch.float32)
 
-        return curve_img, sequence_normalized
+        row = self.target_df.loc[self.target_df['curve_idx'] == curve_idx]
+        target = torch.tensor(row['groundtruth_target'].values[0], dtype=torch.float)
+
+        return (curve_img, sequence_normalized.unsqueeze(1)), target
     
 
 class ImageSequenceGeneDataModule(pl.LightningDataModule):
@@ -134,17 +135,21 @@ class ImageSequenceGeneDataModule(pl.LightningDataModule):
             mean_list.append(mean_curve)
             std_list.append(std_curve)
 
-        norm_mean = np.array(mean_list).mean().item()
-        norm_std = np.array(std_list).mean().item()
+        self.norm_mean = np.array(mean_list).mean().item()
+        self.norm_std = np.array(std_list).mean().item()
 
-        self.train = ImageSequenceGeneDataset(self.curve_dict_train, self.target_df_train, mean=norm_mean, std=norm_std)
-        self.val = ImageSequenceGeneDataset(self.curve_dict_val, self.target_df_val, mean=norm_mean, std=norm_std)
+    def prepare_data(self):
+        return
+
+    def setup(self, stage=None):
+        self.train = ImageSequenceGeneDataset(self.curve_dict_train, self.target_df_train, mean=self.norm_mean, std=self.norm_std)
+        self.val = ImageSequenceGeneDataset(self.curve_dict_val, self.target_df_val, mean=self.norm_mean, std=self.norm_std)
 
     def train_dataloader(self):
         return DataLoader(self.train, batch_size=self.batch_size, shuffle=True)
 
     def val_dataloader(self):
-        return DataLoader(self.val, batch_size=self.batch_size, shuffle=True)
+        return DataLoader(self.val, batch_size=self.batch_size, shuffle=False)
 
 class ImageSequenceGeneDataset(Dataset):
     def __init__(self, curve_dict, target_df, img_directory = 'data/curve_imgs/', sequence_len=40, 
@@ -191,5 +196,6 @@ class ImageSequenceGeneDataset(Dataset):
         #gene info processing
         row = self.target_df.loc[self.target_df['curve_idx'] == curve_idx]
         gene_type = torch.tensor(row[self.one_hot.columns].values, dtype=torch.float32)
+        target = torch.tensor(row['groundtruth_target'].values[0], dtype=torch.long)
 
-        return curve_img, sequence_normalized, gene_type
+        return (curve_img, sequence_normalized.unsqueeze(1), gene_type), target

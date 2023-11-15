@@ -22,18 +22,14 @@ class Classifier(pl.LightningModule):
         self.validation_outputs = []
 
     def get_xy(self, batch):
-        if isinstance(batch, list):
-            x, y = batch[0], batch[1]
-        else:
-            assert isinstance(batch, dict)
-            x, y = batch["x"], batch["y_seq"][:,0]
-        return x, y.to(torch.long).view(-1)
+        x, y = batch[0], batch[1]
+        return x, y
 
     def training_step(self, batch, batch_idx):
         x, y = self.get_xy(batch)
 
         ## TODO: get predictions from your model and store them as y_hat
-        y_hat = self.forward(x)
+        y_hat = self.forward(*x)
         loss = self.loss(y_hat,y)
 
         self.log('train_acc', self.accuracy(y_hat, y), prog_bar=True)
@@ -49,13 +45,12 @@ class Classifier(pl.LightningModule):
     def validation_step(self, batch, batch_idx):
         x, y = self.get_xy(batch)
 
-        #raise NotImplementedError("Not implemented yet")
-        y_hat = self.forward(x)
-
+        y_hat = self.forward(*x)
         loss = self.loss(y_hat,y)
 
-        self.log('val_loss', loss, sync_dist=True, prog_bar=True)
         self.log("val_acc", self.accuracy(y_hat, y), sync_dist=True, prog_bar=True)
+        self.log('val_loss', loss, sync_dist=True, prog_bar=True)
+        
 
         self.validation_outputs.append({
             "y_hat": y_hat,
@@ -66,21 +61,15 @@ class Classifier(pl.LightningModule):
     def on_train_epoch_end(self):
         y_hat = torch.cat([o["y_hat"] for o in self.training_outputs])
         y = torch.cat([o["y"] for o in self.training_outputs])
-        if self.num_classes == 2:
-            probs = F.softmax(y_hat, dim=-1)[:,-1]
-        else:
-            probs = F.softmax(y_hat, dim=-1)
-        self.log("train_auc", self.auc(probs, y.view(-1)), sync_dist=True, prog_bar=True)
+        
+        self.log("train_auc", self.auc(y_hat, y), sync_dist=True, prog_bar=True)
         self.training_outputs = []
 
     def on_validation_epoch_end(self):
         y_hat = torch.cat([o["y_hat"] for o in self.validation_outputs])
         y = torch.cat([o["y"] for o in self.validation_outputs])
-        if self.num_classes == 2:
-            probs = F.softmax(y_hat, dim=-1)[:,-1]
-        else:
-            probs = F.softmax(y_hat, dim=-1)
-        self.log("val_auc", self.auc(probs, y.view(-1)), sync_dist=True, prog_bar=True)
+        
+        self.log("val_auc", self.auc(y_hat, y), sync_dist=True, prog_bar=True)
         self.validation_outputs = []
 
     def configure_optimizers(self):
@@ -144,7 +133,7 @@ class FusionModel(Classifier):
         fusion = torch.cat((img_latent, seq_latent), dim=1)
         output = self.fc(fusion)
 
-        return output
+        return output.squeeze()
 
 
 class GeneFusionModel(Classifier):
@@ -222,6 +211,6 @@ class GeneEnsembleModel(Classifier):
         x = self.fusion(image, sequence, genes)
         x = torch.cat(x + [igi_call.view(-1, 1)], dim=1)
         x = torch.sigmoid(self.fc(x))
-        return x
+        return x.squeeze()
     
     
