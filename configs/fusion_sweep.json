@@ -1,0 +1,21 @@
+{ 
+  "main.project_name": [
+    "pcr-classification"
+  ],
+  "main.batch_size": [
+    32
+  ],
+  "trainer.max_epochs": [
+    20
+  ],
+  "main.model_name": [
+    "fusion"
+  ],
+  "main.dataset_name": [
+    "imgseq"
+  ],
+  "fusion.init_lr": [
+    1e-4,
+    1e-5
+  ]
+}

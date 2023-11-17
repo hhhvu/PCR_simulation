@@ -14,6 +14,8 @@ from sklearn.metrics import roc_auc_score
 # python scripts/dispatcher.py --config_path configs/toy_resnet_sweep.json --num_workers 4
 # python scripts/dispatcher.py --config_path configs/toy_cnn_sweep.json --num_workers 4
 
+# CUDA_VISIBLE_DEVICES=6,7 python scripts/pcr_dispatcher.py --config_path configs/fusion_sweep.json --num_workers 1
+
 def add_main_args(parser: argparse.ArgumentParser) -> argparse.ArgumentParser:
     parser.add_argument(
         "--config_path",
@@ -38,7 +40,7 @@ def add_main_args(parser: argparse.ArgumentParser) -> argparse.ArgumentParser:
 
     parser.add_argument(
         "--grid_search_results_path",
-        default="grid_results_q1_2.csv",
+        default="logs/grid_results_fusion.csv",
         help="Where to save grid search results"
     )
 
@@ -106,15 +108,15 @@ def launch_experiment(args: argparse.Namespace, experiment_config: dict) ->  dic
         os.makedirs(args.log_dir)
 
     # The command to run the script
-    command = ['python', 'scripts/main.py', '--train']
+    command = ['python', 'scripts/pcr_train_script.py', '--train']
 
     unique_suffix = str(int(time.time()))  # Using timestamp
     experiment_name = f"{unique_suffix}"
     model_name = experiment_config['main.model_name']
     for key, value in experiment_config.items():
-        arg_key = key.split('.')[-1] if key.startswith('main.') else key
-        command.extend(['--' + arg_key, str(value)])
-    command.extend(['--experiment_name', model_name + '_' + experiment_name])
+        key = key.split('.')[-1] if key.startswith('main.') else key
+        command.extend(['--' + key, str(value)])
+    command.extend(['--experiment_name', model_name + '_grid-search_' + experiment_name])
 
     # Run the command and capture the output
     subprocess.run(command, stdout=subprocess.PIPE)

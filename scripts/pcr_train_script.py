@@ -132,9 +132,7 @@ def main(args: argparse.Namespace):
 
     args.trainer.accelerator = 'auto'
     args.trainer.logger = logger
-    args.trainer.precision = "bf16-mixed" ## This mixed precision training is highly recommended
-
-    args.devices = find_usable_cuda_devices(1)
+    # args.trainer.precision = "f16-mixed" ## This mixed precision training is highly recommended
 
     args.trainer.callbacks = [
         pl.callbacks.ModelCheckpoint(
@@ -156,11 +154,6 @@ def main(args: argparse.Namespace):
     trainer.validate(model, datamodule)
 
     print("Done")
-
-device = "cuda" if torch.cuda.is_available() else "cpu"
-print(torch.version.cuda)
-print(torch.__version__)
-print(device)
 
 if __name__ == '__main__':
     __spec__ = None
