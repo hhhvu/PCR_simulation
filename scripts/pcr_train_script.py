@@ -22,12 +22,6 @@ NAME_TO_DATASET_CLASS = {
     "imgseqgene": ImageSequenceGeneDataModule,
 }
 
-# TO DELETE
-# tmux new-session -s cph_200a
-# conda create -n cph_200a python=3.10
-# python scripts/main.py --project_name cornerstone_mlp --train --trainer.max_epochs 100
-# python scripts/main.py --project_name cornerstone_cnn --train --trainer.max_epochs 100 --cnn.use_bn True --use_data_augmentation True --batch_size 256 --model_name "cnn" --project_name "cornerstone-cnn" --cnn.num_layers 4
-
 # CUDA_VISIBLE_DEVICES=0 python scripts/pcr_train_script.py --project_name pcr-classification --experiment_name FusionModel_Test --train --trainer.max_epochs 10
 
 def add_main_args(parser: LightningArgumentParser) -> LightningArgumentParser:

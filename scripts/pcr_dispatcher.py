@@ -10,10 +10,6 @@ from sklearn.metrics import roc_auc_score
 
 
 #Run scripts
-# python scripts/dispatcher.py --config_path configs/toy_mlp_sweep.json --num_workers 4
-# python scripts/dispatcher.py --config_path configs/toy_resnet_sweep.json --num_workers 4
-# python scripts/dispatcher.py --config_path configs/toy_cnn_sweep.json --num_workers 4
-
 # CUDA_VISIBLE_DEVICES=6,7 python scripts/pcr_dispatcher.py --config_path configs/fusion_sweep.json --num_workers 1
 
 def add_main_args(parser: argparse.ArgumentParser) -> argparse.ArgumentParser:
