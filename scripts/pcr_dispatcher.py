@@ -6,11 +6,12 @@ import os, subprocess
 import numpy as np
 from csv import DictWriter
 import multiprocessing
-from sklearn.metrics import roc_auc_score
 
 
 #Run scripts
 # CUDA_VISIBLE_DEVICES=6,7 python scripts/pcr_dispatcher.py --config_path configs/fusion_sweep.json --num_workers 1
+
+#python scripts/pcr_dispatcher.py --config_path configs/fusion_sweep.json --num_workers 4
 
 def add_main_args(parser: argparse.ArgumentParser) -> argparse.ArgumentParser:
     parser.add_argument(
@@ -104,7 +105,7 @@ def launch_experiment(args: argparse.Namespace, experiment_config: dict) ->  dic
         os.makedirs(args.log_dir)
 
     # The command to run the script
-    command = ['python', 'scripts/pcr_train_script.py', '--train']
+    command = ['python', 'scripts/pcr_train_script.py', '--train', '--grid_search']
 
     unique_suffix = str(int(time.time()))  # Using timestamp
     experiment_name = f"{unique_suffix}"

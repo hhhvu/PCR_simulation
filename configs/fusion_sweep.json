@@ -1,12 +1,13 @@
 { 
   "main.project_name": [
-    "pcr-classification"
+    "pcr-classification_fusion"
   ],
   "main.batch_size": [
-    32
+    256
   ],
   "trainer.max_epochs": [
-    20
+    25,
+    50
   ],
   "main.model_name": [
     "fusion"
@@ -17,5 +18,25 @@
   "fusion.init_lr": [
     1e-4,
     1e-5
+  ],
+  "fusion.hidden_size": [
+    128,
+    512,
+    1024
+  ],
+  "fusion.latent_dim": [
+    32,
+    128,
+    512
+  ],
+  "fusion.num_layers":[
+    5,
+    10,
+    25
+  ],
+  "fusion.pretrained":[
+    true,
+    false
   ]
+
 }
