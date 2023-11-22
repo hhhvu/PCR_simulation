@@ -205,6 +205,6 @@ class ImageSequenceGeneDataset(Dataset):
         #gene info processing
         row = self.target_df.loc[self.target_df['curve_idx'] == curve_idx]
         gene_type = torch.tensor(row[self.one_hot.columns].values, dtype=torch.float32)
-        target = torch.tensor(row['groundtruth_target'].values[0], dtype=torch.long)
+        target = torch.tensor(row['groundtruth_target'].values[0], dtype=torch.float)
 
         return (curve_img, sequence_normalized.unsqueeze(1), gene_type), target

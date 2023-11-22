@@ -21,7 +21,7 @@ from PIL import Image
 from torchvision import models 
 from torchvision.models import resnet18
 
-from transformers import Wav2Vec2Model, Wav2Vec2Tokenizer
+from transformers import Wav2Vec2FeatureExtractor
 
 class SequenceDataset(Dataset):
     def __init__(self, curve_dict, target_df, train=True, sequence_len=40, 
@@ -58,8 +58,6 @@ class SequenceDataset(Dataset):
         target = self.target_df.loc[self.target_df['curve_idx'] == curve_idx, 'groundtruth_target'].values[0]
 
         return sequence_normalized, torch.tensor(target, dtype=torch.long)
-
-
 
 class ImageSequenceDataset(Dataset):
     def __init__(self, curve_dict, target_df,img_directory = 'data/curve_imgs/', train=True, sequence_len=40, 
@@ -158,10 +156,10 @@ class FusionModel(nn.Module):
         output = self.fc(fusion)
         return output
 
-class FineTunedWav2Vec2(nn.Module):
-    def __init__(self):
-        super(FineTunedWav2Vec2, self).__init__()
-        self.wav2vec2 = wav2vec2_xlsr_2b(pretrained=True)
+class AudioModel(nn.Module):
+    def __init__(self, input_size, hidden_size, latent_dim, sequence_length):
+        super(AudioModel, self).__init__()
+        self.wav2vec2 = Wav2Vec2FeatureExtractor(feature_size=512, sampling_rate=input_size)
         # Assuming the model returns a tensor of shape (batch_size, feature_size)
         # We add an additional linear layer to get a single output for binary classification
         self.classifier = nn.Linear(self.wav2vec2.fc.out_features, 1)
