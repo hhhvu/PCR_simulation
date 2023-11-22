@@ -46,6 +46,10 @@ class Classifier(pl.LightningModule):
         x, y = self.get_xy(batch)
 
         y_hat = self.forward(*x)
+
+        print(y)
+        print(y_hat)
+
         loss = self.loss(y_hat,y)
 
         self.log("val_acc", self.accuracy(y_hat, y), sync_dist=True, prog_bar=True)
@@ -146,7 +150,7 @@ class GeneFusionModel(Classifier):
     """
         Model that takes in sequence, image, and gene data and outputs multiple prediction heads.
     """
-    def __init__(self, input_size=1, hidden_size=512, latent_dim=512, sequence_length=40, num_layers=5, genes=6, delta=64, num_heads=3, init_lr=1e-4):
+    def __init__(self, input_size=1, hidden_size=512, latent_dim=512, sequence_length=40, num_layers=5, genes=6, delta=64, num_heads=1, init_lr=1e-4):
         super().__init__(num_classes=2, init_lr=init_lr)
         self.save_hyperparameters()
 
@@ -181,13 +185,13 @@ class GeneFusionModel(Classifier):
             nn.Linear(256, 128),
             nn.ReLU(),
             nn.Linear(128, 64),
-            nn.ReLU()
-            # nn.Linear(64, 1),
-            # nn.Sigmoid()
-        )
+            nn.ReLU(),
+            nn.Linear(64, 1),
+            nn.Sigmoid()
+            )
 
         # Prediction heads
-        self.heads = nn.ModuleList([nn.Linear(64, 1) for _ in range(num_heads)])
+        #self.heads = nn.ModuleList([nn.Linear(64, 1) for _ in range(num_heads)])
 
     def forward(self, image, sequence, genes):
         # Image processing
@@ -207,9 +211,9 @@ class GeneFusionModel(Classifier):
         output = self.fc(fusion)
 
         # Get predictions for each head
-        outputs = [torch.sigmoid(head(output)) for head in self.heads]
+        #outputs = [torch.sigmoid(head(output)) for head in self.heads]
 
-        return outputs
+        return output.squeeze()
 
 
 class GeneEnsembleModel(Classifier):

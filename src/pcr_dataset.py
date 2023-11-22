@@ -120,7 +120,7 @@ class ImageSequenceGeneDataModule(pl.LightningDataModule):
         data augmentation.
     """
     def __init__(self, curve_dict_path, target_df_path, batch_size=32, shuffle=True):
-
+        super().__init__()
         self.batch_size = batch_size
         self.shuffle = shuffle
 
@@ -180,7 +180,7 @@ class ImageSequenceGeneDataset(Dataset):
         # Image transformations: Resize and Normalize
         self.img_transforms = transforms.Compose([
             transforms.Lambda(lambda image: image.convert('RGB')),
-            transforms.Resize((128, 128)),  # Resizing to a consistent size
+            transforms.Resize((224, 224)),  # Resizing to a consistent size
             transforms.ToTensor(),  # Convert PIL image to tensor
             transforms.Normalize((0.5,), (0.5,))  # Normalizing to [0,1]
             ])
