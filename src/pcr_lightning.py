@@ -13,9 +13,9 @@ class Classifier(pl.LightningModule):
         self.num_classes = num_classes
 
         # Define loss fn for classifier
-        self.loss = nn.BCELoss()
+        self.loss = nn.BCEWithLogitsLoss()
 
-        self.accuracy = torchmetrics.Accuracy(task="multiclass", num_classes=self.num_classes)
+        self.accuracy = torchmetrics.Accuracy(task="binary" if self.num_classes == 2 else "multiclass", num_classes=self.num_classes)
         self.auc = torchmetrics.AUROC(task="binary" if self.num_classes == 2 else "multiclass", num_classes=self.num_classes)
 
         self.training_outputs = []
@@ -84,7 +84,7 @@ class FusionModel(Classifier):
     """
         Model that takes in sequence and image data and outputs single prediction head.
     """
-    def __init__(self, input_size=1, hidden_size=512, latent_dim=512, sequence_length=40, num_layers=5, init_lr=1e-4):
+    def __init__(self, input_size=1, hidden_size=512, latent_dim=512, sequence_length=40, num_layers=5, init_lr=1e-4, pretrained=True):
         super().__init__(num_classes=2, init_lr=init_lr)
         self.save_hyperparameters()
 
@@ -92,10 +92,16 @@ class FusionModel(Classifier):
         
         # Image processing via EfficientNet_V2_L
         # TODO change to true
-        self.effnet = models.efficientnet_v2_l(pretrained=True)
-        num_ftrs = self.effnet.classifier[1].in_features
+        # self.effnet = models.efficientnet_v2_l(pretrained=True)
+        # num_ftrs = self.effnet.classifier[1].in_features
+        # self.effnet.classifier = nn.Linear(num_ftrs, self.latent_dim)  # Adjusting to output a 512-dimensional 
 
-        self.effnet.classifier = nn.Linear(num_ftrs, self.latent_dim)  # Adjusting to output a 512-dimensional 
+        if pretrained:
+            self.vit = models.vit_b_32(weights='IMAGENET1K_V1')
+        else:
+            self.vit = models.vit_b_32(pretrained=False)
+        num_ftrs = self.vit.num_classes
+        self.vit_classifier = nn.Linear(num_ftrs, self.latent_dim)  # Adjusting to output a 512-dimensional 
 
         # Sequence processing via LSTM
         self.lstm = nn.LSTM(input_size, hidden_size, num_layers, batch_first=True)
@@ -123,7 +129,7 @@ class FusionModel(Classifier):
 
     def forward(self, image, sequence):
         # Image processing
-        img_latent = self.effnet(image)
+        img_latent = self.vit_classifier(self.vit(image))
 
         # Sequence processing
         lstm_out, _ = self.lstm(sequence)

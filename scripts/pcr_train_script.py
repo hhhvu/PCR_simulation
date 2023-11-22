@@ -23,6 +23,10 @@ NAME_TO_DATASET_CLASS = {
 }
 
 # CUDA_VISIBLE_DEVICES=0 python scripts/pcr_train_script.py --project_name pcr-classification --experiment_name FusionModel_Test --train --trainer.max_epochs 10
+#python scripts/pcr_train_script.py --project_name pcr-classification_fusion_test --experiment_name FusionModel_Test --train --trainer.max_epochs 10 --fusion.pretrained true --fusion.init_lr 1e-5 --fusion.hidden_size 512 --fusion.latent_dim 512 --fusion.num_layers 10  --model_name fusion
+
+#conda create -n PCR_v2 python=3.9
+
 
 def add_main_args(parser: LightningArgumentParser) -> LightningArgumentParser:
 
@@ -73,6 +77,13 @@ def add_main_args(parser: LightningArgumentParser) -> LightningArgumentParser:
         default=False,
         action="store_true",
         help="Whether to train the model."
+    )
+
+    parser.add_argument(
+        "--grid_search",
+        default=False,
+        action="store_true",
+        help="Whether to save model checkpoints. No saving during grid search."
     )
 
     return parser
@@ -126,14 +137,25 @@ def main(args: argparse.Namespace):
 
     args.trainer.accelerator = 'auto'
     args.trainer.logger = logger
-    # args.trainer.precision = "f16-mixed" ## This mixed precision training is highly recommended
+    args.trainer.precision = "bf16-mixed" ## This mixed precision training is highly recommended
 
-    args.trainer.callbacks = [
-        pl.callbacks.ModelCheckpoint(
-            monitor=args.monitor_key,
-            mode='min' if "loss" in args.monitor_key else "max",
-            save_last=True
-        )]
+    if not args.grid_search:
+        args.trainer.callbacks = [
+            pl.callbacks.ModelCheckpoint(
+                monitor=args.monitor_key,
+                mode='min' if "loss" in args.monitor_key else "max",
+                save_last=True
+            )]
+    else:
+        args.trainer.callbacks = []
+
+
+    # args.trainer.callbacks = [
+    #     pl.callbacks.ModelCheckpoint(
+    #         monitor=args.monitor_key,
+    #         mode='min' if "loss" in args.monitor_key else "max",
+    #         save_last=True
+    #     )]
 
     trainer = pl.Trainer(**vars(args.trainer))
     trainer.log_every_n_steps = 1
@@ -142,7 +164,7 @@ def main(args: argparse.Namespace):
         print("Training model")
         trainer.fit(model, datamodule)
 
-    print("Best model checkpoint path: ", trainer.checkpoint_callback.best_model_path)
+    #print("Best model checkpoint path: ", trainer.checkpoint_callback.best_model_path)
 
     print("Evaluating model on validation set")
     trainer.validate(model, datamodule)
