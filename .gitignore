@@ -62,6 +62,8 @@ Miniconda3-latest-Linux-x86_64.sh
 
 #Curve images
 data/curve_imgs/
+data/curve_imgs.zip
+data/gru_best_pred.csv
 output
 wandb
 pcr-classification/

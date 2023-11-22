@@ -141,7 +141,7 @@ def main(args: argparse.Namespace):
 
     args.trainer.accelerator = 'auto'
     args.trainer.logger = logger
-    args.trainer.precision = "bf16-mixed" ## This mixed precision training is highly recommended
+    # args.trainer.precision = "bf16-mixed" ## This mixed precision training is highly recommended
 
 
     args.trainer.callbacks = [

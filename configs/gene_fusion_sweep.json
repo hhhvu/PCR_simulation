@@ -1,6 +1,6 @@
 { 
   "main.project_name": [
-    "pcr-classification"
+    "pcr-classification-fusiongene"
   ],
   "main.batch_size": [
     32
