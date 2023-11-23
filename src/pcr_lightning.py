@@ -271,9 +271,9 @@ class GeneFusionHeadsModel(Classifier):
         output = self.fc(fusion)
 
         # Get predictions for each head
-        outputs = [torch.sigmoid(head(output)) for head in self.heads]
+        outputs = torch.stack([torch.sigmoid(head(output)) for head in self.heads], dim=-1)
 
-        return output.squeeze()
+        return outputs.squeeze()
 
 class GeneEnsembleModel(Classifier):
     """

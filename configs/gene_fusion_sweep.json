@@ -9,30 +9,30 @@
     50
   ],
   "main.model_name": [
-    "gene_fusion"
+    "gene_fusion_heads"
   ],
   "main.dataset_name": [
     "imgseqgene"
   ],
   "main.igi_call": [
-    true
+    "True"
   ],
-  "gene_fusion.init_lr": [
+  "gene_fusion_heads.init_lr": [
     1e-4,
     1e-5
   ],
-  "gene_fusion.hidden_size": [
+  "gene_fusion_heads.hidden_size": [
     128,
     512,
     1024
   ],
-  "gene_fusion.latent_dim": [
+  "gene_fusion_heads.latent_dim": [
     16,
     32,
     64,
     128  
   ],
-  "gene_fusion.num_layers":[
+  "gene_fusion_heads.num_layers":[
     3,
     5,
     10,

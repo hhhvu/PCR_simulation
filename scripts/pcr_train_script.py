@@ -32,6 +32,7 @@ NAME_TO_DATASET_CLASS = {
 
 #conda create -n PCR_v2 python=3.9
 
+# CUDA_VISIBLE_DEVICES=1 python scripts/pcr_train_script.py --project_name pcr-classification_fusion_test --experiment_name GeneFusionHeadsModel_Test --train --trainer.max_epochs 10 --gene_fusion_heads.init_lr 1e-4 --gene_fusion_heads.hidden_size 512 --gene_fusion_heads.latent_dim 512 --gene_fusion_heads.num_layers 3  --model_name gene_fusion_heads --dataset_name imgseqgene --igi_call true
 
 def add_main_args(parser: LightningArgumentParser) -> LightningArgumentParser:
 
@@ -93,8 +94,7 @@ def add_main_args(parser: LightningArgumentParser) -> LightningArgumentParser:
 
     parser.add_argument(
         "--igi_call",
-        default=False,
-        action="store_true",
+        default='False',
         help="Whether to include igi_call information (multiple heads of output)."
     )
 
@@ -131,7 +131,7 @@ def main(args: argparse.Namespace):
     dataset_args['batch_size'] = int(args.batch_size)
     dataset_args['curve_dict_path'] = 'data/groundtruth_df_curve_dict_split_v2.pkl'
     dataset_args['target_df_path'] = 'data/groundtruth_df_target_data_split_v2.csv'
-    dataset_args['igi_call'] = args.igi_call
+    dataset_args['igi_call'] = (args.igi_call == 'true')
 
     datamodule = NAME_TO_DATASET_CLASS[args.dataset_name](**dataset_args)
     # datamodule = NAME_TO_DATASET_CLASS[args.dataset_name](**vars(args[args.dataset_name]))
