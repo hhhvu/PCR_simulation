@@ -148,7 +148,7 @@ class FusionModel(Classifier):
 
 class GeneFusionModel(Classifier):
     """
-        Model that takes in sequence, image, and gene data and outputs multiple prediction heads.
+        Model that takes in sequence, image, and gene data and outputs one prediction head.
     """
     def __init__(self, input_size=1, hidden_size=512, latent_dim=512, sequence_length=40, num_layers=5, genes=6, delta=64, num_heads=1, init_lr=1e-4):
         super().__init__(num_classes=2, init_lr=init_lr)
@@ -190,8 +190,71 @@ class GeneFusionModel(Classifier):
             nn.Sigmoid()
             )
 
+    def forward(self, image, sequence, genes):
+        # Image processing
+        img_latent = self.vit_classifier(self.vit(image))
+
+        # Sequence processing
+        lstm_out, _ = self.lstm(sequence)
+        seq_latent = self.lstm_fc(lstm_out[:, -1, :])  # Taking the last output from LSTM for the whole sequence
+
+        # Calculating delta
+        delta_seq = sequence[:, 1:] - sequence[:, :-1] #taking first difference
+        lstm_out_delta, _ = self.lstm_delta(delta_seq)
+        seq_latent_delta = self.lstm_fc_delta(lstm_out_delta[:, -1, :])  # Taking the last output from LSTM for the whole sequence
+
+        # Fusion
+        fusion = torch.cat((img_latent, seq_latent, genes.squeeze(1), seq_latent_delta), dim=1)
+        output = self.fc(fusion)
+
+        return output.squeeze()
+
+class GeneFusionHeadsModel(Classifier):
+    """
+        Model that takes in sequence, image, and gene data and outputs multiple prediction heads (for pred, igi_fp, igi_fn).
+    """
+    def __init__(self, input_size=1, hidden_size=512, latent_dim=512, sequence_length=40, num_layers=5, genes=6, delta=64, num_heads=3, init_lr=1e-4):
+        super().__init__(num_classes=2, init_lr=init_lr)
+        self.save_hyperparameters()
+
+        self.latent_dim = latent_dim
+        self.delta = delta
+        
+        self.vit = models.vit_b_32(weights='IMAGENET1K_V1')
+        num_ftrs = self.vit.num_classes
+        self.vit_classifier = nn.Linear(num_ftrs, self.latent_dim)  # Adjusting to output a 512-dimensional 
+
+        # Sequence processing via LSTM
+        self.lstm = nn.LSTM(input_size, hidden_size, num_layers, batch_first=True)
+        self.hidden_state = (torch.zeros(num_layers, sequence_length, hidden_size), torch.zeros(num_layers, sequence_length, hidden_size))
+        # Final fully connected layer to ensure the LSTM output has a size of 512
+        self.lstm_fc = nn.Linear(hidden_size, self.latent_dim)
+
+        # Delta Sequence processing via LSTM
+        self.lstm_delta = nn.LSTM(input_size, hidden_size, num_layers, batch_first=True)
+        self.hidden_state_delta = (torch.zeros(num_layers, sequence_length-1, hidden_size), torch.zeros(num_layers, sequence_length-1, hidden_size))
+        # Final fully connected layer to ensure the LSTM output has a size of 512
+        self.lstm_fc_delta = nn.Linear(hidden_size, self.latent_dim)
+
+        # Caluclate neural_net input size after appending genes and delta latent
+        neural_net_input = self.latent_dim*3 + genes
+
+        # Fusion of image and sequence representations
+        self.fc = nn.Sequential(
+            nn.Linear(neural_net_input, 512),  # Concatenated vectors are of size 1024 (512 from image + 512 from sequence)
+            nn.ReLU(),
+            nn.Linear(512, 256),
+            nn.ReLU(),
+            nn.Linear(256, 128),
+            nn.ReLU(),
+            nn.Linear(128, 64),
+            nn.ReLU(),
+            # nn.Linear(64, 1),
+            # nn.Sigmoid()
+            )
+
         # Prediction heads
-        #self.heads = nn.ModuleList([nn.Linear(64, 1) for _ in range(num_heads)])
+        self.heads = nn.ModuleList([nn.Linear(64, 1) for _ in range(num_heads)])
 
     def forward(self, image, sequence, genes):
         # Image processing
@@ -211,10 +274,9 @@ class GeneFusionModel(Classifier):
         output = self.fc(fusion)
 
         # Get predictions for each head
-        #outputs = [torch.sigmoid(head(output)) for head in self.heads]
+        outputs = [torch.sigmoid(head(output)) for head in self.heads]
 
         return output.squeeze()
-
 
 class GeneEnsembleModel(Classifier):
     """

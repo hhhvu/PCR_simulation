@@ -119,14 +119,18 @@ class ImageSequenceGeneDataModule(pl.LightningDataModule):
         Pytorch Lightning DataModule for Image+Sequence dataset. This will download the dataset, prepare data loaders and apply
         data augmentation.
     """
-    def __init__(self, curve_dict_path, target_df_path, batch_size=32, shuffle=True):
+    def __init__(self, curve_dict_path, target_df_path, batch_size=32, shuffle=True, igi_call=False):
         super().__init__()
         self.batch_size = batch_size
         self.shuffle = shuffle
+        self.igi_call = igi_call
 
         with open(curve_dict_path, 'rb') as file:
             self.curve_dict = pkl.load(file)
         self.target_df = pd.read_csv(target_df_path)
+
+        self.target_df['igi_fp'] = (self.target_df['Igi_call_quant'] > self.target_df['groundtruth_target']).astype(int)
+        self.target_df['igi_fn'] = (self.target_df['Igi_call_quant'] < self.target_df['groundtruth_target']).astype(int)
 
         self.target_df_train = self.target_df[self.target_df['split']=='train']
         self.curve_dict_train = {k: self.curve_dict[k] for k in self.curve_dict.keys() if k in self.target_df_train['curve_idx'].values}
@@ -151,8 +155,8 @@ class ImageSequenceGeneDataModule(pl.LightningDataModule):
         return
 
     def setup(self, stage=None):
-        self.train = ImageSequenceGeneDataset(self.curve_dict_train, self.target_df_train, mean=self.norm_mean, std=self.norm_std)
-        self.val = ImageSequenceGeneDataset(self.curve_dict_val, self.target_df_val, mean=self.norm_mean, std=self.norm_std)
+        self.train = ImageSequenceGeneDataset(self.curve_dict_train, self.target_df_train, igi_call=self.igi_call, mean=self.norm_mean, std=self.norm_std)
+        self.val = ImageSequenceGeneDataset(self.curve_dict_val, self.target_df_val, igi_call=self.igi_call, mean=self.norm_mean, std=self.norm_std)
 
     def train_dataloader(self):
         return DataLoader(self.train, batch_size=self.batch_size, shuffle=True)
@@ -161,7 +165,7 @@ class ImageSequenceGeneDataModule(pl.LightningDataModule):
         return DataLoader(self.val, batch_size=self.batch_size, shuffle=False)
 
 class ImageSequenceGeneDataset(Dataset):
-    def __init__(self, curve_dict, target_df, img_directory = 'data/curve_imgs/', sequence_len=40, 
+    def __init__(self, curve_dict, target_df, img_directory = 'data/curve_imgs/', sequence_len=40, igi_call=False,
                  mean=0, std=1):
         self.curve_dict = curve_dict
         self.target_df = target_df
@@ -176,6 +180,7 @@ class ImageSequenceGeneDataset(Dataset):
 
         self.mean = mean
         self.std = std
+        self.igi_call = igi_call
 
         # Image transformations: Resize and Normalize
         self.img_transforms = transforms.Compose([
@@ -205,6 +210,12 @@ class ImageSequenceGeneDataset(Dataset):
         #gene info processing
         row = self.target_df.loc[self.target_df['curve_idx'] == curve_idx]
         gene_type = torch.tensor(row[self.one_hot.columns].values, dtype=torch.float32)
+
         target = torch.tensor(row['groundtruth_target'].values[0], dtype=torch.float)
+
+        if self.igi_call:
+            igi_fp = torch.tensor(row['igi_fp'].values[0], dtype=torch.float)
+            igi_fn = torch.tensor(row['igi_fn'].values[0], dtype=torch.float)
+            target = [target, igi_fp, igi_fn]
 
         return (curve_img, sequence_normalized.unsqueeze(1), gene_type), target
