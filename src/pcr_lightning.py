@@ -47,9 +47,6 @@ class Classifier(pl.LightningModule):
 
         y_hat = self.forward(*x)
 
-        print(y)
-        print(y_hat)
-
         loss = self.loss(y_hat,y)
 
         self.log("val_acc", self.accuracy(y_hat, y), sync_dist=True, prog_bar=True)

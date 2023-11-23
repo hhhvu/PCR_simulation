@@ -119,10 +119,11 @@ class ImageSequenceGeneDataModule(pl.LightningDataModule):
         Pytorch Lightning DataModule for Image+Sequence dataset. This will download the dataset, prepare data loaders and apply
         data augmentation.
     """
-    def __init__(self, curve_dict_path, target_df_path, batch_size=32, shuffle=True):
+    def __init__(self, curve_dict_path, target_df_path, batch_size=32, shuffle=True, num_workers =4):
         super().__init__()
         self.batch_size = batch_size
         self.shuffle = shuffle
+        self.num_workers = num_workers
 
         with open(curve_dict_path, 'rb') as file:
             self.curve_dict = pkl.load(file)
@@ -155,10 +156,10 @@ class ImageSequenceGeneDataModule(pl.LightningDataModule):
         self.val = ImageSequenceGeneDataset(self.curve_dict_val, self.target_df_val, mean=self.norm_mean, std=self.norm_std)
 
     def train_dataloader(self):
-        return DataLoader(self.train, batch_size=self.batch_size, shuffle=True)
+        return DataLoader(self.train, batch_size=self.batch_size, shuffle=True, num_workers = self.num_workers)
 
     def val_dataloader(self):
-        return DataLoader(self.val, batch_size=self.batch_size, shuffle=False)
+        return DataLoader(self.val, batch_size=self.batch_size, shuffle=False, num_workers = self.num_workers)
 
 class ImageSequenceGeneDataset(Dataset):
     def __init__(self, curve_dict, target_df, img_directory = 'data/curve_imgs/', sequence_len=40, 

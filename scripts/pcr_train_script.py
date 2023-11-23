@@ -27,7 +27,7 @@ NAME_TO_DATASET_CLASS = {
 # CUDA_VISIBLE_DEVICES=0 python scripts/pcr_train_script.py --project_name pcr-classification --experiment_name FusionModel_Test --train --trainer.max_epochs 10
 #python scripts/pcr_train_script.py --project_name pcr-classification_fusion_test --experiment_name FusionModel_Test --train --trainer.max_epochs 10 --fusion.pretrained true --fusion.init_lr 1e-5 --fusion.hidden_size 512 --fusion.latent_dim 512 --fusion.num_layers 10  --model_name fusion
 
-#python scripts/pcr_train_script.py --project_name pcr-classification_fusion_test --experiment_name FusionModel_Test --train --trainer.max_epochs 5 --gene_fusion.init_lr 1e-5 --gene_fusion.hidden_size 512 --gene_fusion.latent_dim 32 --gene_fusion.num_layers 10  --model_name gene_fusion --dataset_name imgseqgene
+#python scripts/pcr_train_script.py --project_name pcr-classification_fusion_test --experiment_name FusionModel_Test --train --trainer.max_epochs 1 --gene_fusion.init_lr 1e-5 --gene_fusion.hidden_size 512 --gene_fusion.latent_dim 32 --gene_fusion.num_layers 10  --model_name gene_fusion --dataset_name imgseqgene --grid_search
 
 #conda create -n PCR_v2 python=3.9
 
@@ -143,13 +143,15 @@ def main(args: argparse.Namespace):
     args.trainer.logger = logger
     # args.trainer.precision = "bf16-mixed" ## This mixed precision training is highly recommended
 
-
-    args.trainer.callbacks = [
-        pl.callbacks.ModelCheckpoint(
-            monitor=args.monitor_key,
-            mode='min' if "loss" in args.monitor_key else "max",
-            save_last=True
-        )]
+    if args.grid_search:
+        args.trainer.enable_checkpointing=False
+    else:
+        args.trainer.callbacks = [
+                pl.callbacks.ModelCheckpoint(
+                monitor=args.monitor_key,
+                mode='min' if "loss" in args.monitor_key else "max",
+                save_last=True
+            )]
 
 
     trainer = pl.Trainer(**vars(args.trainer))
@@ -164,12 +166,12 @@ def main(args: argparse.Namespace):
     print("Evaluating model on validation set")
     trainer.validate(model, datamodule)
 
-    if args.grid_search:
+    #if args.grid_search:
         # PyTorch Lightning creates checkpoint folder
-        ckpt_dir = os.path.dirname(trainer.checkpoint_callback.best_model_path) 
+        #ckpt_dir = os.path.dirname(trainer.checkpoint_callback.best_model_path) 
 
         # Delete entire checkpoint folder
-        shutil.rmtree(ckpt_dir)
+        # shutil.rmtree(ckpt_dir)
 
     print("Done")
 
