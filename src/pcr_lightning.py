@@ -47,6 +47,10 @@ class Classifier(pl.LightningModule):
 
         y_hat = self.forward(*x)
 
+        # Temporary fix to only track val metrics of prediction head.
+        y = y.t()
+        y_hat = y_hat.t()
+
         loss = self.loss(y_hat,y)
 
         self.log("val_acc", self.accuracy(y_hat, y), sync_dist=True, prog_bar=True)
@@ -67,10 +71,12 @@ class Classifier(pl.LightningModule):
         self.training_outputs = []
 
     def on_validation_epoch_end(self):
-        y_hat = torch.cat([o["y_hat"] for o in self.validation_outputs])
-        y = torch.cat([o["y"] for o in self.validation_outputs])
+        y_hat = torch.cat([o["y_hat"] for o in self.validation_outputs], dim=-1)
+        y = torch.cat([o["y"] for o in self.validation_outputs], dim=-1)
         
         self.log("val_auc", self.auc(y_hat, y), sync_dist=True, prog_bar=True)
+        for i in range(3):
+            self.log(f"val_auc_head_{i}", self.auc(y_hat[i], y[i]), sync_dist=True, prog_bar=True)
         self.validation_outputs = []
 
     def configure_optimizers(self):
