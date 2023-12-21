@@ -67,3 +67,4 @@ data/gru_best_pred.csv
 output
 wandb
 pcr-classification/
+pcr-classification_fusion_test/
