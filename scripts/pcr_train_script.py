@@ -32,7 +32,7 @@ NAME_TO_DATASET_CLASS = {
 
 #conda create -n PCR_v2 python=3.9
 
-# CUDA_VISIBLE_DEVICES=1 python scripts/pcr_train_script.py --project_name pcr-classification_fusion_test --experiment_name GeneFusionHeadsModel_Test --train --trainer.max_epochs 10 --gene_fusion_heads.init_lr 1e-4 --gene_fusion_heads.hidden_size 512 --gene_fusion_heads.latent_dim 512 --gene_fusion_heads.num_layers 3  --model_name gene_fusion_heads --dataset_name imgseqgene --igi_call true
+# CUDA_VISIBLE_DEVICES=7 python scripts/pcr_train_script.py --project_name pcr-classification_fusion_test --experiment_name GeneFusionHeadsModel_Test --train --trainer.max_epochs 50 --gene_fusion_heads.init_lr 1e-4 --gene_fusion_heads.hidden_size 512 --gene_fusion_heads.latent_dim 512 --gene_fusion_heads.num_layers 3 --gene_fusion_heads.delta 64 --model_name gene_fusion_heads --dataset_name imgseqgene --igi_call true
 
 def add_main_args(parser: LightningArgumentParser) -> LightningArgumentParser:
 

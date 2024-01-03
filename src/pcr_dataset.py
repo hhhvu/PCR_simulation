@@ -219,4 +219,4 @@ class ImageSequenceGeneDataset(Dataset):
             igi_fn = torch.tensor(row['igi_fn'].values[0], dtype=torch.float)
             target = torch.stack([target, igi_fp, igi_fn], dim=0)
 
-        return (curve_img, sequence_normalized.unsqueeze(1), gene_type), target
+        return (curve_img, sequence_normalized.unsqueeze(1), gene_type.squeeze(1)), target
