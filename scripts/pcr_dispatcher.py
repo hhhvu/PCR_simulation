@@ -9,7 +9,7 @@ import multiprocessing
 
 
 #Run scripts
-# CUDA_VISIBLE_DEVICES=6,7 python scripts/pcr_dispatcher.py --config_path configs/fusion_sweep.json --num_workers 1
+# CUDA_VISIBLE_DEVICES=7 python scripts/pcr_dispatcher.py --config_path configs/gene_fusion_sweep.json --num_workers 1
 
 #python scripts/pcr_dispatcher.py --config_path configs/fusion_sweep.json --num_workers 4
 #python scripts/pcr_dispatcher.py --config_path configs/gene_fusion_sweep.json --num_workers 4

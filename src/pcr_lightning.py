@@ -13,7 +13,7 @@ class Classifier(pl.LightningModule):
         self.num_classes = num_classes
 
         # Define loss fn for classifier
-        self.loss = nn.BCEWithLogitsLoss()
+        self.loss = nn.BCELoss()
 
         self.accuracy = torchmetrics.Accuracy(task="binary" if self.num_classes == 2 else "multiclass", num_classes=self.num_classes)
         self.auc = torchmetrics.AUROC(task="binary" if self.num_classes == 2 else "multiclass", num_classes=self.num_classes)
@@ -30,9 +30,9 @@ class Classifier(pl.LightningModule):
 
         ## TODO: get predictions from your model and store them as y_hat
         y_hat = self.forward(*x)
-        loss = self.loss(y_hat,y)
+        loss = sum(self.loss(y_hat[:,i],y[:,i]) for i in range(3))
 
-        self.log('train_loss', loss, prog_bar=True)
+        self.log('train_loss', loss, prog_bar=True, sync_dist=True)
 
         ## Store the predictions and labels for use at the end of the epoch
         self.training_outputs.append({
@@ -45,9 +45,10 @@ class Classifier(pl.LightningModule):
         x, y = self.get_xy(batch)
 
         y_hat = self.forward(*x)
-        loss = self.loss(y_hat,y)
 
-        self.log('val_loss', loss, prog_bar=True)
+        loss = sum(self.loss(y_hat[:,i],y[:,i]) for i in range(3))
+
+        self.log('val_loss', loss, prog_bar=True, sync_dist=True)
 
         self.validation_outputs.append({
             "y_hat": y_hat,
@@ -78,7 +79,7 @@ class Classifier(pl.LightningModule):
         scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer)
 
         # return {'optimizer': optimizer, 'lr_scheduler': {'scheduler': scheduler, 'monitor':'val_loss'}}
-        return {'optimizer': optimizer}
+        return optimizer
 
 class FusionModel(Classifier):
     """
@@ -254,12 +255,13 @@ class GeneFusionHeadsModel(Classifier):
         lstm_out, _ = self.lstm(sequence)
         seq_latent = self.lstm_fc(lstm_out[:, -1, :])  # Taking the last output from LSTM for the whole sequence
 
-       # Calculating delta
+        # Calculating delta
         delta_latent = torch.max(sequence, dim=1)[0] - torch.min(sequence, dim=1)[0]
         delta_latent = delta_latent.expand((-1, self.delta))
 
         # Fusion
         fusion = torch.cat((img_latent, seq_latent, genes.squeeze(1), delta_latent), dim=1)
+        # fusion = torch.cat((img_latent, seq_latent, genes.squeeze(1), seq_latent_delta), dim=1)
         output = self.fc(fusion)
 
         # Get predictions for each head
@@ -270,14 +272,9 @@ class GeneFusionHeadsModel(Classifier):
     def on_validation_epoch_end(self):
         y_hat = torch.cat([o["y_hat"] for o in self.validation_outputs])
         y = torch.cat([o["y"] for o in self.validation_outputs])
-        
-        y_hat = (y_hat[:,0] >= 0.5).float()
-        y = y[:,0]
 
-        print((y_hat == y).sum())
-
-        self.log("val_auc", self.auc(y_hat, y), sync_dist=True, prog_bar=True)
-        self.log("val_acc", self.accuracy(y_hat, y), sync_dist=True, prog_bar=True)
+        self.log("val_auc", self.auc(y_hat[:,0], y[:,0]), sync_dist=True, prog_bar=True)
+        self.log("val_acc", self.accuracy(y_hat[:,0], y[:,0]), sync_dist=True, prog_bar=True)
         self.validation_outputs = []
 
 class GeneEnsembleModel(Classifier):

@@ -3,7 +3,10 @@
     "pcr-classification-fusiongene"
   ],
   "main.batch_size": [
-    512
+    32,
+    64,
+    128,
+    256
   ],
   "trainer.max_epochs": [
     50
@@ -15,27 +18,30 @@
     "imgseqgene"
   ],
   "main.igi_call": [
-    "True"
+    "true"
   ],
   "gene_fusion_heads.init_lr": [
     1e-4,
-    1e-5
+    1e-3,
+    1e-2
   ],
   "gene_fusion_heads.hidden_size": [
-    128,
+    256,
     512,
     1024
   ],
   "gene_fusion_heads.latent_dim": [
-    16,
-    32,
-    64,
-    128  
+    256,
+    512,
+    1024
   ],
   "gene_fusion_heads.num_layers":[
     3,
-    5,
-    10,
-    25
+    5
+  ],
+  "gene_fusion_heads.delta":[
+    32,
+    64,
+    128
   ]
 }

@@ -1,4 +1,3 @@
-
 import argparse
 import sys
 import os
@@ -32,7 +31,11 @@ NAME_TO_DATASET_CLASS = {
 
 #conda create -n PCR_v2 python=3.9
 
+# Train command
 # CUDA_VISIBLE_DEVICES=7 python scripts/pcr_train_script.py --project_name pcr-classification_fusion_test --experiment_name GeneFusionHeadsModel_Test --train --trainer.max_epochs 50 --gene_fusion_heads.init_lr 1e-4 --gene_fusion_heads.hidden_size 512 --gene_fusion_heads.latent_dim 512 --gene_fusion_heads.num_layers 3 --gene_fusion_heads.delta 64 --model_name gene_fusion_heads --dataset_name imgseqgene --igi_call true
+
+# Eval command
+# CUDA_VISIBLE_DEVICES=7 python scripts/pcr_train_script.py --project_name pcr-classification_fusion_test --experiment_name GeneFusionHeadsModel_Test --checkpoint_path pcr-classification_fusion_test/kibnmcmb/checkpoints/epoch=43-step=19184.ckpt --gene_fusion_heads.init_lr 1e-4 --gene_fusion_heads.hidden_size 512 --gene_fusion_heads.latent_dim 512 --gene_fusion_heads.num_layers 3 --gene_fusion_heads.delta 64 --model_name gene_fusion_heads --dataset_name imgseqgene --igi_call true
 
 def add_main_args(parser: LightningArgumentParser) -> LightningArgumentParser:
 
@@ -44,7 +47,7 @@ def add_main_args(parser: LightningArgumentParser) -> LightningArgumentParser:
 
     parser.add_argument(
         "--dataset_name",
-        default="imgseq",
+        default="imgseqgene",
         help="Name of dataset to use."
     )
 
@@ -146,7 +149,8 @@ def main(args: argparse.Namespace):
     print("Initializing trainer")
     logger = pl.loggers.WandbLogger(project=args.project_name, 
                                     name = args.experiment_name,
-                                    entity="saselvan")
+                                    entity="saselvan",
+                                    log_model="all")
 
     args.trainer.accelerator = 'auto'
     args.trainer.logger = logger
@@ -170,7 +174,7 @@ def main(args: argparse.Namespace):
         print("Training model")
         trainer.fit(model, datamodule)
 
-    #print("Best model checkpoint path: ", trainer.checkpoint_callback.best_model_path)
+    print("Best model checkpoint path: ", trainer.checkpoint_callback.best_model_path)
 
     print("Evaluating model on validation set")
     trainer.validate(model, datamodule)
