@@ -22,6 +22,8 @@ class ImageSequenceDataModule(pl.LightningDataModule):
         self.shuffle = shuffle
         self.num_workers = num_workers
 
+        print("WE ARE USING THE IMAGE SEQUENCE DATASET")
+
         with open(curve_dict_path, 'rb') as file:
             self.curve_dict = pkl.load(file)
         self.target_df = pd.read_csv(target_df_path)
@@ -125,6 +127,8 @@ class ImageSequenceGeneDataModule(pl.LightningDataModule):
         self.shuffle = shuffle
         self.num_workers = num_workers
         self.igi_call = igi_call
+
+        print("WE ARE USING THE IMAGE SEQUENCE GENE DATASET")
 
         with open(curve_dict_path, 'rb') as file:
             self.curve_dict = pkl.load(file)
