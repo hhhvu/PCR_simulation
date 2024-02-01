@@ -6,8 +6,8 @@ from os.path import dirname, realpath
 import torch
 
 sys.path.append(dirname(dirname(realpath(__file__))))
-from src.pcr_lightning import FusionModel, GeneFusionModel, GeneFusionHeadsModel, GeneEnsembleModel
-from src.pcr_dataset import ImageSequenceDataModule, ImageSequenceGeneDataModule
+from src.pcr_lightning import FusionModel, GeneFusionModel, GeneFusionHeadsModel, GeneEnsembleModel, CurveShapeModel
+from src.pcr_dataset import ImageSequenceDataModule, ImageSequenceGeneDataModule, ImageDataModule
 from lightning.pytorch.cli import LightningArgumentParser
 from lightning.pytorch.accelerators import find_usable_cuda_devices
 import lightning.pytorch as pl
@@ -17,11 +17,13 @@ NAME_TO_MODEL_CLASS = {
     "gene_fusion": GeneFusionModel,
     "gene_fusion_heads": GeneFusionHeadsModel,
     "gene_ensemble": GeneEnsembleModel,
+    "curve": CurveShapeModel
 }
 
 NAME_TO_DATASET_CLASS = {
     "imgseq": ImageSequenceDataModule,
     "imgseqgene": ImageSequenceGeneDataModule,
+    "img": ImageDataModule
 }
 
 # CUDA_VISIBLE_DEVICES=0 python scripts/pcr_train_script.py --project_name pcr-classification --experiment_name FusionModel_Test --train --trainer.max_epochs 10
@@ -33,6 +35,8 @@ NAME_TO_DATASET_CLASS = {
 
 # Train command
 # CUDA_VISIBLE_DEVICES=7 python scripts/pcr_train_script.py --project_name pcr-classification_fusion_test --experiment_name GeneFusionHeadsModel_Test --train --trainer.max_epochs 50 --gene_fusion_heads.init_lr 1e-4 --gene_fusion_heads.hidden_size 512 --gene_fusion_heads.latent_dim 512 --gene_fusion_heads.num_layers 3 --gene_fusion_heads.delta 64 --model_name gene_fusion_heads --dataset_name imgseqgene --igi_call true
+
+# python -m pdb -c continue scripts/pcr_train_script.py --train --grid_search --project_name pcr-classification_image --experiment_name ImgModel_Test --trainer.max_epochs 50 --model_name curve --dataset_name img --igi_call true
 
 # Eval command
 # CUDA_VISIBLE_DEVICES=7 python scripts/pcr_train_script.py --project_name pcr-classification_fusion_test --experiment_name GeneFusionHeadsModel_Test --checkpoint_path pcr-classification_fusion_test/kibnmcmb/checkpoints/epoch=43-step=19184.ckpt --gene_fusion_heads.init_lr 1e-4 --gene_fusion_heads.hidden_size 512 --gene_fusion_heads.latent_dim 512 --gene_fusion_heads.num_layers 3 --gene_fusion_heads.delta 64 --model_name gene_fusion_heads --dataset_name imgseqgene --igi_call true
@@ -97,7 +101,7 @@ def add_main_args(parser: LightningArgumentParser) -> LightningArgumentParser:
 
     parser.add_argument(
         "--igi_call",
-        default='False',
+        default='True',
         help="Whether to include igi_call information (multiple heads of output)."
     )
 

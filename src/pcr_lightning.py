@@ -29,7 +29,8 @@ class Classifier(pl.LightningModule):
         x, y = self.get_xy(batch)
 
         ## TODO: get predictions from your model and store them as y_hat
-        y_hat = self.forward(*x)
+        #y_hat = self.forward(*x)
+        y_hat = self.forward(x)
         loss = sum(self.loss(y_hat[:,i],y[:,i]) for i in range(3))
 
         self.log('train_loss', loss, prog_bar=True, sync_dist=True)
@@ -44,8 +45,10 @@ class Classifier(pl.LightningModule):
     def validation_step(self, batch, batch_idx):
         x, y = self.get_xy(batch)
 
-        y_hat = self.forward(*x)
-
+        #y_hat = self.forward(*x)
+        y_hat = self.forward(x)
+        print(y_hat.shape)
+        print(y.shape)
         loss = sum(self.loss(y_hat[:,i],y[:,i]) for i in range(3))
 
         self.log('val_loss', loss, prog_bar=True, sync_dist=True)
@@ -205,6 +208,61 @@ class GeneFusionModel(Classifier):
         output = self.fc(fusion)
 
         return output.squeeze()
+
+class CurveShapeModel(Classifier):
+    """
+        Model that solely finetunes the ViT model from the sequence.
+    """
+    def __init__(self, input_size=1, hidden_size=512, latent_dim=512, sequence_length=40, num_layers=5, genes=6, delta=64, num_heads=3, init_lr=1e-4, pretrained=True):
+        super().__init__(num_classes=2, init_lr=init_lr)
+        self.save_hyperparameters()
+
+        self.latent_dim = latent_dim
+        self.delta = delta
+        self.pretrained = pretrained
+        
+        if self.pretrained:
+            self.vit = models.vit_b_32(weights='IMAGENET1K_V1')
+        else:
+            self.vit = models.vit_b_32(pretrained=False)
+
+        num_ftrs = self.vit.num_classes
+        self.vit_classifier = nn.Linear(num_ftrs, self.latent_dim)  
+
+        # Fusion of image and sequence representations
+        self.fc = nn.Sequential(
+            nn.Linear(self.latent_dim, 512),  # Concatenated vectors are of size 1024 (512 from image + 512 from sequence)
+            nn.ReLU(),
+            nn.Linear(512, 256),
+            nn.ReLU(),
+            nn.Linear(256, 128),
+            nn.ReLU(),
+            nn.Linear(128, 64),
+            nn.ReLU(),
+            # nn.Linear(64, 1),
+            # nn.Sigmoid()
+            )
+
+        # Prediction heads
+        self.heads = nn.ModuleList([nn.Linear(64, 1) for _ in range(num_heads)])
+
+    def forward(self, image):
+        # Image processing
+        img_latent = self.vit_classifier(self.vit(image))
+        output = self.fc(img_latent)
+
+        # Get predictions for each head
+        outputs = torch.stack([torch.sigmoid(head(output)) for head in self.heads], dim=-1)
+
+        return outputs.squeeze()
+
+    def on_validation_epoch_end(self):
+        y_hat = torch.cat([o["y_hat"] for o in self.validation_outputs])
+        y = torch.cat([o["y"] for o in self.validation_outputs])
+
+        self.log("val_auc", self.auc(y_hat[:,0], y[:,0]), sync_dist=True, prog_bar=True)
+        self.log("val_acc", self.accuracy(y_hat[:,0], y[:,0]), sync_dist=True, prog_bar=True)
+        self.validation_outputs = []
 
 class GeneFusionHeadsModel(Classifier):
     """
