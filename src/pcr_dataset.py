@@ -16,7 +16,7 @@ class ImageSequenceDataModule(pl.LightningDataModule):
         Pytorch Lightning DataModule for Image+Sequence dataset. This will download the dataset, prepare data loaders and apply
         data augmentation.
     """
-    def __init__(self, curve_dict_path, target_df_path, batch_size=32, shuffle=True, num_workers =8):
+    def __init__(self, curve_dict_path, target_df_path, batch_size=32, shuffle=True, num_workers =16):
         super().__init__()
         self.batch_size = batch_size
         self.shuffle = shuffle
