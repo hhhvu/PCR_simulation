@@ -142,6 +142,9 @@ class ImageDataModule(pl.LightningDataModule):
         self.target_df_val = self.target_df[self.target_df['split']=='val']
         self.curve_dict_val = {k: self.curve_dict[k] for k in self.curve_dict.keys() if k in self.target_df_val['curve_idx'].values}
 
+        self.target_df_test = self.target_df[self.target_df['split']=='test']
+        self.curve_dict_test = {k: self.curve_dict[k] for k in self.curve_dict.keys() if k in self.target_df_test['curve_idx'].values}
+
         mean_list = []
         std_list = []
 
@@ -155,22 +158,29 @@ class ImageDataModule(pl.LightningDataModule):
         self.norm_mean = np.array(mean_list).mean().item()
         self.norm_std = np.array(std_list).mean().item()
 
+        self.setup()
+
     def prepare_data(self):
         return
 
     def setup(self, stage=None):
         self.train = ImageDataset(self.curve_dict_train, self.target_df_train, igi_call=self.igi_call, mean=self.norm_mean, std=self.norm_std)
         self.val = ImageDataset(self.curve_dict_val, self.target_df_val, igi_call=self.igi_call, mean=self.norm_mean, std=self.norm_std)
+        self.test = ImageDataset(self.curve_dict_test, self.target_df_test, igi_call=self.igi_call, mean=self.norm_mean, std=self.norm_std)
 
     def train_dataloader(self):
         return DataLoader(self.train, batch_size=self.batch_size, shuffle=True, num_workers = self.num_workers)
 
     def val_dataloader(self):
         return DataLoader(self.val, batch_size=self.batch_size, shuffle=False, num_workers = self.num_workers)
+    
+    def test_dataloader(self):
+        return DataLoader(self.test, batch_size=self.batch_size, shuffle=False, num_workers = self.num_workers)
 
 class ImageDataset(Dataset):
     def __init__(self, curve_dict, target_df, img_directory = 'data/curve_imgs/', sequence_len=40, igi_call=True,
                  mean=0, std=1):
+        
         self.curve_dict = curve_dict
         self.target_df = target_df
 
@@ -215,7 +225,7 @@ class ImageDataset(Dataset):
             igi_fn = torch.tensor(row['igi_fn'].values[0], dtype=torch.float)
             target = torch.stack([target, igi_fp, igi_fn], dim=0)
 
-        return curve_img, target
+        return curve_img, target, curve_idx
 
 class ImageSequenceGeneDataModule(pl.LightningDataModule):
     """

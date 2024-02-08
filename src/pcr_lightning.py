@@ -47,13 +47,28 @@ class Classifier(pl.LightningModule):
 
         #y_hat = self.forward(*x)
         y_hat = self.forward(x)
-        print(y_hat.shape)
-        print(y.shape)
         loss = sum(self.loss(y_hat[:,i],y[:,i]) for i in range(3))
 
         self.log('val_loss', loss, prog_bar=True, sync_dist=True)
 
         self.validation_outputs.append({
+            "y_hat": y_hat,
+            "y": y
+        })
+        return loss
+
+    def test_step(self, batch, batch_idx):
+        x, y = self.get_xy(batch)
+
+        y_hat = self.forward(x)
+
+        #loss = self.loss(y_hat,y)
+        loss = sum(self.loss(y_hat[:,i],y[:,i]) for i in range(3))
+
+        self.log('test_loss', loss, sync_dist=True, prog_bar=True)
+        self.log('test_acc', self.accuracy(y_hat, y), sync_dist=True, prog_bar=True)
+
+        self.test_outputs.append({
             "y_hat": y_hat,
             "y": y
         })
@@ -73,7 +88,30 @@ class Classifier(pl.LightningModule):
         
         self.log("val_auc", self.auc(y_hat, y), sync_dist=True, prog_bar=True)
         self.log("val_acc", self.accuracy(y_hat, y), sync_dist=True, prog_bar=True)
-        self.validation_outputs = []
+        #self.validation_outputs = []
+        
+        # save to process later for evaluation
+        torch.save(y_hat, 'y_hat_val_image.pt')
+        torch.save(y, 'y_val_true.pt')
+    
+    def on_test_epoch_end(self):
+        y_hat = torch.cat([o["y_hat"] for o in self.test_outputs])
+        y = torch.cat([o["y"] for o in self.test_outputs])
+
+        if self.num_classes == 2:
+            probs = F.softmax(y_hat, dim=-1)[:,-1]
+        else:
+            probs = F.softmax(y_hat, dim=-1)
+
+        self.log("test_auc", self.auc(probs, y.view(-1)), sync_dist=True, prog_bar=True)
+
+        self.log("val_auc", self.auc(y_hat, y), sync_dist=True, prog_bar=True)
+        self.log("val_acc", self.accuracy(y_hat, y), sync_dist=True, prog_bar=True)
+        self.test_outputs = []
+
+        # save to process later for evaluation
+        torch.save(y_hat, 'y_hat_test_image.pt')
+        torch.save(y, 'y_test_true.pt')
 
     def configure_optimizers(self):
         ## TODO: Define your optimizer and learning rate scheduler here (hint: Adam is a good default)
