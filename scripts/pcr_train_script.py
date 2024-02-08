@@ -4,9 +4,12 @@ import os
 import shutil 
 from os.path import dirname, realpath
 import torch
+from tqdm import tqdm
+import pandas as pd
+import numpy as np
 
 sys.path.append(dirname(dirname(realpath(__file__))))
-from src.pcr_lightning import FusionModel, GeneFusionModel, GeneFusionHeadsModel, GeneEnsembleModel, CurveShapeModel
+from src.pcr_lightning import FusionModel, GeneFusionModel, GeneFusionHeadsModel, GeneEnsembleModel, CurveShapeModel, CurveShapeDeltaModel
 from src.pcr_dataset import ImageSequenceDataModule, ImageSequenceGeneDataModule, ImageDataModule
 from lightning.pytorch.cli import LightningArgumentParser
 from lightning.pytorch.accelerators import find_usable_cuda_devices
@@ -17,7 +20,8 @@ NAME_TO_MODEL_CLASS = {
     "gene_fusion": GeneFusionModel,
     "gene_fusion_heads": GeneFusionHeadsModel,
     "gene_ensemble": GeneEnsembleModel,
-    "curve": CurveShapeModel
+    "curve": CurveShapeModel,
+    "curve_delta": CurveShapeDeltaModel
 }
 
 NAME_TO_DATASET_CLASS = {
@@ -37,6 +41,12 @@ NAME_TO_DATASET_CLASS = {
 # CUDA_VISIBLE_DEVICES=7 python scripts/pcr_train_script.py --project_name pcr-classification_fusion_test --experiment_name GeneFusionHeadsModel_Test --train --trainer.max_epochs 50 --gene_fusion_heads.init_lr 1e-4 --gene_fusion_heads.hidden_size 512 --gene_fusion_heads.latent_dim 512 --gene_fusion_heads.num_layers 3 --gene_fusion_heads.delta 64 --model_name gene_fusion_heads --dataset_name imgseqgene --igi_call true
 
 # python -m pdb -c continue scripts/pcr_train_script.py --train --grid_search --project_name pcr-classification_image --experiment_name ImgModel_Test --trainer.max_epochs 50 --model_name curve --dataset_name img --igi_call true
+
+# python -m pdb -c continue scripts/pcr_train_script.py --train --grid_search --project_name pcr-classification_image_range --experiment_name ImgRangeModel --trainer.max_epochs 50 --model_name curve_delta --dataset_name imgseq --igi_call true
+
+# python -m pdb -c continue scripts/pcr_train_script.py --project_name pcr-classification_image --experiment_name ImgModel_Save_3_head --trainer.max_epochs 100 --model_name curve --dataset_name img --igi_call true --curve.latent_dim 1024 --curve.init_lr 1e-5 --checkpoint_path pcr-classification_image/d73jmc6v/checkpoints/epoch=11-step=660.ckpt 
+
+# python -m pdb -c continue scripts/pcr_train_script.py --train --project_name pcr-classification_image --experiment_name ImgModel_Save_3_head --trainer.max_epochs 100 --model_name curve --dataset_name img --igi_call true --curve.latent_dim 1024 --curve.init_lr 1e-5
 
 # Eval command
 # CUDA_VISIBLE_DEVICES=7 python scripts/pcr_train_script.py --project_name pcr-classification_fusion_test --experiment_name GeneFusionHeadsModel_Test --checkpoint_path pcr-classification_fusion_test/kibnmcmb/checkpoints/epoch=43-step=19184.ckpt --gene_fusion_heads.init_lr 1e-4 --gene_fusion_heads.hidden_size 512 --gene_fusion_heads.latent_dim 512 --gene_fusion_heads.num_layers 3 --gene_fusion_heads.delta 64 --model_name gene_fusion_heads --dataset_name imgseqgene --igi_call true
@@ -75,7 +85,7 @@ def add_main_args(parser: LightningArgumentParser) -> LightningArgumentParser:
 
     parser.add_argument(
         "--monitor_key",
-        default="val_acc",
+        default="val_auc",
         help="Name of metric to use for checkpointing. (e.g. val_loss, val_acc)"
     )
 
@@ -150,6 +160,7 @@ def main(args: argparse.Namespace):
     else:
         model = NAME_TO_MODEL_CLASS[args.model_name].load_from_checkpoint(args.checkpoint_path)
 
+
     print("Initializing trainer")
     logger = pl.loggers.WandbLogger(project=args.project_name, 
                                     name = args.experiment_name,
@@ -178,10 +189,19 @@ def main(args: argparse.Namespace):
         print("Training model")
         trainer.fit(model, datamodule)
 
-    # print("Best model checkpoint path: ", trainer.checkpoint_callback.best_model_path)
+    print("Best model checkpoint path: ", trainer.checkpoint_callback.best_model_path)
 
     print("Evaluating model on validation set")
     trainer.validate(model, datamodule)
+    val_results = model.validation_outputs
+    print("******val results******", val_results)
+
+    # print("Evaluating model on test set")
+    # trainer.test(model, datamodule)
+    
+
+    # test_results = trainer.results
+    # print("******test results******", test_results)
 
     #if args.grid_search:
         # PyTorch Lightning creates checkpoint folder

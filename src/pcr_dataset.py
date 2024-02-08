@@ -16,11 +16,12 @@ class ImageSequenceDataModule(pl.LightningDataModule):
         Pytorch Lightning DataModule for Image+Sequence dataset. This will download the dataset, prepare data loaders and apply
         data augmentation.
     """
-    def __init__(self, curve_dict_path, target_df_path, batch_size=32, shuffle=True, num_workers =16):
+    def __init__(self, curve_dict_path, target_df_path, batch_size=32, shuffle=True, num_workers =16, igi_call=False):
         super().__init__()
         self.batch_size = batch_size
         self.shuffle = shuffle
         self.num_workers = num_workers
+        self.igi_call = igi_call
 
         print("WE ARE USING THE IMAGE SEQUENCE DATASET")
 
@@ -28,11 +29,17 @@ class ImageSequenceDataModule(pl.LightningDataModule):
             self.curve_dict = pkl.load(file)
         self.target_df = pd.read_csv(target_df_path)
 
+        self.target_df['igi_fp'] = (self.target_df['Igi_call_quant'] > self.target_df['groundtruth_target']).astype(int)
+        self.target_df['igi_fn'] = (self.target_df['Igi_call_quant'] < self.target_df['groundtruth_target']).astype(int)
+
         self.target_df_train = self.target_df[self.target_df['split']=='train']
         self.curve_dict_train = {k: self.curve_dict[k] for k in self.curve_dict.keys() if k in self.target_df_train['curve_idx'].values}
         
         self.target_df_val = self.target_df[self.target_df['split']=='val']
         self.curve_dict_val = {k: self.curve_dict[k] for k in self.curve_dict.keys() if k in self.target_df_val['curve_idx'].values}
+
+        self.target_df_test = self.target_df[self.target_df['split']=='test']
+        self.curve_dict_test = {k: self.curve_dict[k] for k in self.curve_dict.keys() if k in self.target_df_test['curve_idx'].values}
 
         mean_list = []
         std_list = []
@@ -51,17 +58,21 @@ class ImageSequenceDataModule(pl.LightningDataModule):
         return
 
     def setup(self, stage=None):
-        self.train = ImageSequenceDataset(self.curve_dict_train, self.target_df_train, mean=self.norm_mean, std=self.norm_std)
-        self.val = ImageSequenceDataset(self.curve_dict_val, self.target_df_val, mean=self.norm_mean, std=self.norm_std)
+        self.train = ImageSequenceDataset(self.curve_dict_train, self.target_df_train, igi_call=self.igi_call, mean=self.norm_mean, std=self.norm_std)
+        self.val = ImageSequenceDataset(self.curve_dict_val, self.target_df_val, igi_call=self.igi_call, mean=self.norm_mean, std=self.norm_std)
+        self.test = ImageSequenceDataset(self.curve_dict_test, self.target_df_test, igi_call=self.igi_call, mean=self.norm_mean, std=self.norm_std)
 
     def train_dataloader(self):
-        return DataLoader(self.train, batch_size=self.batch_size, shuffle=True, num_workers =self.num_workers)
+        return DataLoader(self.train, batch_size=self.batch_size, shuffle=True, num_workers = self.num_workers)
 
     def val_dataloader(self):
-        return DataLoader(self.val, batch_size=self.batch_size, shuffle=False, num_workers =self.num_workers)
+        return DataLoader(self.val, batch_size=self.batch_size, shuffle=False, num_workers = self.num_workers)
+    
+    def test_dataloader(self):
+        return DataLoader(self.test, batch_size=self.batch_size, shuffle=False, num_workers = self.num_workers)
 
 class ImageSequenceDataset(Dataset):
-    def __init__(self, curve_dict, target_df, img_directory = 'data/curve_imgs/', sequence_len=40, 
+    def __init__(self, curve_dict, target_df, img_directory = 'data/curve_imgs/', sequence_len=40, igi_call=True,
                  mean=0, std=1):
         self.curve_dict = curve_dict
         self.target_df = target_df
@@ -73,6 +84,7 @@ class ImageSequenceDataset(Dataset):
         self.img_directory = img_directory
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         self.sequence_len = sequence_len
+        self.igi_call = igi_call
 
         self.mean = mean
         self.std = std
@@ -112,6 +124,11 @@ class ImageSequenceDataset(Dataset):
 
         row = self.target_df.loc[self.target_df['curve_idx'] == curve_idx]
         target = torch.tensor(row['groundtruth_target'].values[0], dtype=torch.float)
+
+        if self.igi_call:
+            igi_fp = torch.tensor(row['igi_fp'].values[0], dtype=torch.float)
+            igi_fn = torch.tensor(row['igi_fn'].values[0], dtype=torch.float)
+            target = torch.stack([target, igi_fp, igi_fn], dim=0)
 
         return (curve_img, sequence_normalized.unsqueeze(1)), target
     
@@ -225,7 +242,7 @@ class ImageDataset(Dataset):
             igi_fn = torch.tensor(row['igi_fn'].values[0], dtype=torch.float)
             target = torch.stack([target, igi_fp, igi_fn], dim=0)
 
-        return curve_img, target, curve_idx
+        return curve_img, target #, curve_idx
 
 class ImageSequenceGeneDataModule(pl.LightningDataModule):
     """
