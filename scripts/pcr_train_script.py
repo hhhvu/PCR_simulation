@@ -9,7 +9,7 @@ import pandas as pd
 import numpy as np
 
 sys.path.append(dirname(dirname(realpath(__file__))))
-from src.pcr_lightning import FusionModel, GeneFusionModel, GeneFusionHeadsModel, GeneEnsembleModel, CurveShapeModel, CurveShapeDeltaModel
+from src.pcr_lightning import FusionModel, GeneFusionModel, GeneFusionHeadsModel, GeneEnsembleModel, CurveShapeModel, CurveShapeDeltaModel, SeqModel, SeqDeltaModel, SeqCurveModel, SeqDeltaGeneModel, SeqGeneModel, SeqCurveGeneModel
 from src.pcr_dataset import ImageSequenceDataModule, ImageSequenceGeneDataModule, ImageDataModule
 from lightning.pytorch.cli import LightningArgumentParser
 from lightning.pytorch.accelerators import find_usable_cuda_devices
@@ -21,7 +21,13 @@ NAME_TO_MODEL_CLASS = {
     "gene_fusion_heads": GeneFusionHeadsModel,
     "gene_ensemble": GeneEnsembleModel,
     "curve": CurveShapeModel,
-    "curve_delta": CurveShapeDeltaModel
+    "curve_delta": CurveShapeDeltaModel,
+    "seq": SeqModel,
+    "seq_delta": SeqDeltaModel,
+    "seq_curve": SeqCurveModel,
+    "seq_delta_gene": SeqDeltaGeneModel,
+    "seq_gene": SeqGeneModel,
+    "seq_curve_gene": SeqCurveGeneModel
 }
 
 NAME_TO_DATASET_CLASS = {
