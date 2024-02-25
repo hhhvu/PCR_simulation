@@ -171,10 +171,16 @@ if __name__ == "__main__":
     target_df['igi_fp'] = (target_df['Igi_call_quant'] > target_df['groundtruth_target']).astype(int)
     target_df['igi_fn'] = (target_df['Igi_call_quant'] < target_df['groundtruth_target']).astype(int)
 
+    print(target_df.head(10))
+    print(target_df.columns)
+    print(target_df.split.unique())
+
+    print(target_df[target_df['split']=='test'].shape)
+
     ###########################################
     ## Get the right normalization values
     ###########################################
-
+    
     target_df_filtered = target_df[target_df['split']=='train']
     curve_dict_filtered = {k: curve_dict[k] for k in curve_dict.keys() if k in target_df_filtered['curve_idx'].values}
 
@@ -244,3 +250,4 @@ if __name__ == "__main__":
                              'igi_fp': np.concatenate(igi_fp).squeeze(),
                              'igi_fn': np.concatenate(igi_fn).squeeze()})
     test_pred_df.to_csv('data/model_outputs/10_27_fusion_model_vit_delta64_val_pred_df.csv', index = False)
+    
