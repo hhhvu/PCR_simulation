@@ -1,0 +1,38 @@
+{ 
+  "main.project_name": [
+    "pcr-classification_seq_curve_gene"
+  ],
+  "main.batch_size": [
+    32,
+    64
+  ],
+  "trainer.max_epochs": [
+    50
+  ],
+  "main.model_name": [
+    "seq_curve_gene"
+  ],
+  "main.dataset_name": [
+    "imgseqgene"
+  ],
+  "main.igi_call": [
+    "true"
+  ],
+  "seq_curve_gene.init_lr": [
+    1e-3,
+    5e-4,
+    1e-4
+  ],
+  "seq_curve_gene.num_heads": [
+    3
+  ],
+  "seq_curve_gene.num_layers":[
+    3,
+    10
+  ],
+  "seq_curve_gene.latent_dim": [
+    256,
+    512,
+    1024
+  ]
+}
