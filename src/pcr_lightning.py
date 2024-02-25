@@ -282,7 +282,7 @@ class SeqModel(Classifier):
         # Prediction heads
         self.heads = nn.ModuleList([nn.Linear(64, 1) for _ in range(num_heads)])
 
-    def forward(self, image, sequence, genes):
+    def forward(self, sequence): #image, genes
         # Sequence processing
         lstm_out, _ = self.lstm(sequence)
         seq_latent = self.lstm_fc(lstm_out[:, -1, :])  # Taking the last output from LSTM for the whole sequence
