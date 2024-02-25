@@ -42,7 +42,8 @@ NAME_TO_DATASET_CLASS = {
 
 #python scripts/pcr_train_script.py --project_name pcr-classification_fusion_test --experiment_name FusionModel_Test --train --trainer.max_epochs 1 --gene_fusion.init_lr 1e-5 --gene_fusion.hidden_size 512 --gene_fusion.latent_dim 32 --gene_fusion.num_layers 10  --model_name gene_fusion --dataset_name imgseqgene --grid_search
 
-#python scripts/pcr_train_script.py --project_name pcr-classification_Seq_large --experiment_name SeqModelLargeData_Test --train --trainer.max_epochs 50 --model_name seq --dataset_name seq_data --grid_search
+#python scripts/pcr_train_script.py --project_name pcr-classification_Seq_large --experiment_name SeqModelLargeData_Test --train --trainer.max_epochs 50 --model_name seq --dataset_name seq_data --grid_search --igi_call true
+#python scripts/pcr_train_script.py --project_name pcr-classification_Seq_large --experiment_name SeqModelOldData_Test --train --trainer.max_epochs 50 --model_name seq --dataset_name seq_data --grid_search --igi_call true
 
 #conda create -n PCR_v2 python=3.9
 
@@ -151,8 +152,8 @@ def main(args: argparse.Namespace):
     dataset_args = vars(args[args.dataset_name])
     # dataset_args['use_data_augmentation'] = bool(args.use_data_augmentation)
     dataset_args['batch_size'] = int(args.batch_size)
-    dataset_args['curve_dict_path'] = 'data/new_groundtruth_df_curve_dict_fn.pkl' #'data/groundtruth_df_curve_dict_split_v2.pkl'
-    dataset_args['target_df_path'] = 'data/new_groundtruth_df_target_data.csv' #'data/groundtruth_df_target_data_split_v2.csv'
+    dataset_args['curve_dict_path'] =  'data/new_groundtruth_df_curve_dict_fn.pkl' #'data/groundtruth_df_curve_dict_split_v2.pkl' 
+    dataset_args['target_df_path'] = 'data/new_groundtruth_df_target_data.csv' #'data/groundtruth_df_target_data_split_v2.csv
     dataset_args['igi_call'] = (args.igi_call == 'true')
 
     datamodule = NAME_TO_DATASET_CLASS[args.dataset_name](**dataset_args)

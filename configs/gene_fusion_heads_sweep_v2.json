@@ -1,0 +1,39 @@
+{ 
+  "main.project_name": [
+    "pcr-classification-fusiongene"
+  ],
+  "main.batch_size": [
+    128
+  ],
+  "trainer.max_epochs": [
+    200
+  ],
+  "main.model_name": [
+    "gene_fusion_heads"
+  ],
+  "main.dataset_name": [
+    "imgseqgene"
+  ],
+  "main.igi_call": [
+    "true"
+  ],
+  "gene_fusion_heads.init_lr": [
+    1e-4
+  ],
+  "gene_fusion_heads.hidden_size": [
+    128,
+    256,
+    512
+  ],
+  "gene_fusion_heads.latent_dim": [
+    512,
+    1024
+  ],
+  "gene_fusion_heads.num_layers":[
+    3
+  ],
+  "gene_fusion_heads.delta":[
+    64,
+    128
+  ]
+}

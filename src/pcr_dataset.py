@@ -477,7 +477,7 @@ class SequenceDataset(Dataset):
         #gene info processing
         row = self.target_df.loc[self.target_df['curve_idx'] == curve_idx]
         # gene_type = torch.tensor(row[self.one_hot.columns].values, dtype=torch.float32)
-        # target = torch.tensor(row['groundtruth_target'].values[0], dtype=torch.float)
+        target = torch.tensor(row['groundtruth_target'].values[0], dtype=torch.float)
 
         if self.igi_call:
             igi_fp = torch.tensor(row['igi_fp'].values[0], dtype=torch.float)
