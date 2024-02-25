@@ -42,7 +42,7 @@ NAME_TO_DATASET_CLASS = {
 
 # python -m pdb -c continue scripts/pcr_train_script.py --train --grid_search --project_name pcr-classification_image --experiment_name ImgModel_Test --trainer.max_epochs 50 --model_name curve --dataset_name img --igi_call true
 
-# python -m pdb -c continue scripts/pcr_train_script.py --train --grid_search --project_name pcr-classification_image_range --experiment_name ImgRangeModel --trainer.max_epochs 50 --model_name curve_delta --dataset_name imgseq --igi_call true
+# CUDA_VISIBLE_DEVICES=1 python -m pdb -c continue scripts/pcr_train_script.py --train --grid_search --project_name pcr-classification_image_range --experiment_name ImgRangeModel --trainer.max_epochs 50 --model_name curve_delta --dataset_name imgseq --igi_call true
 
 # python -m pdb -c continue scripts/pcr_train_script.py --project_name pcr-classification_image --experiment_name ImgModel_Save_3_head --trainer.max_epochs 100 --model_name curve --dataset_name img --igi_call true --curve.latent_dim 1024 --curve.init_lr 1e-5 --checkpoint_path pcr-classification_image/d73jmc6v/checkpoints/epoch=11-step=660.ckpt 
 
@@ -189,12 +189,12 @@ def main(args: argparse.Namespace):
         print("Training model")
         trainer.fit(model, datamodule)
 
-    print("Best model checkpoint path: ", trainer.checkpoint_callback.best_model_path)
+    #print("Best model checkpoint path: ", trainer.checkpoint_callback.best_model_path)
 
     print("Evaluating model on validation set")
     trainer.validate(model, datamodule)
     val_results = model.validation_outputs
-    print("******val results******", val_results)
+    #print("******val results******", val_results)
 
     # print("Evaluating model on test set")
     # trainer.test(model, datamodule)

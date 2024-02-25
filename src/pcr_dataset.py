@@ -43,24 +43,39 @@ class ImageSequenceDataModule(pl.LightningDataModule):
 
         mean_list = []
         std_list = []
+        deltas_list = []
 
         for key, curve in tqdm(self.curve_dict_train.items()):
             mean_curve = np.array(curve).mean().item()
             std_curve = np.array(curve).std().item()
 
+            delta_curve = np.array(curve).max().item() - np.array(curve).min().item()
+
             mean_list.append(mean_curve)
             std_list.append(std_curve)
+            deltas_list.append(delta_curve)
 
         self.norm_mean = np.array(mean_list).mean().item()
         self.norm_std = np.array(std_list).mean().item()
+
+        #print(delta_curve)
+        # print(np.array(deltas_list).shape)
+        # print(np.array(deltas_list).std())
+
+        self.delta_mean = np.array(deltas_list).mean().item()
+        self.delta_std = np.array(deltas_list).std().item()
+        # print('delta std and mean')
 
     def prepare_data(self):
         return
 
     def setup(self, stage=None):
-        self.train = ImageSequenceDataset(self.curve_dict_train, self.target_df_train, igi_call=self.igi_call, mean=self.norm_mean, std=self.norm_std)
-        self.val = ImageSequenceDataset(self.curve_dict_val, self.target_df_val, igi_call=self.igi_call, mean=self.norm_mean, std=self.norm_std)
-        self.test = ImageSequenceDataset(self.curve_dict_test, self.target_df_test, igi_call=self.igi_call, mean=self.norm_mean, std=self.norm_std)
+        self.train = ImageSequenceDataset(self.curve_dict_train, self.target_df_train, igi_call=self.igi_call, mean=self.norm_mean, std=self.norm_std,
+                                          delta_mean=self.delta_mean, delta_std=self.delta_std)
+        self.val = ImageSequenceDataset(self.curve_dict_val, self.target_df_val, igi_call=self.igi_call, mean=self.norm_mean, std=self.norm_std,
+                                        delta_mean=self.delta_mean, delta_std=self.delta_std)
+        self.test = ImageSequenceDataset(self.curve_dict_test, self.target_df_test, igi_call=self.igi_call, mean=self.norm_mean, std=self.norm_std,
+                                         delta_mean=self.delta_mean, delta_std=self.delta_std)
 
     def train_dataloader(self):
         return DataLoader(self.train, batch_size=self.batch_size, shuffle=True, num_workers = self.num_workers)
@@ -73,7 +88,7 @@ class ImageSequenceDataModule(pl.LightningDataModule):
 
 class ImageSequenceDataset(Dataset):
     def __init__(self, curve_dict, target_df, img_directory = 'data/curve_imgs/', sequence_len=40, igi_call=True,
-                 mean=0, std=1):
+                 mean=0, std=1, delta_mean=0, delta_std=1):
         self.curve_dict = curve_dict
         self.target_df = target_df
 
@@ -88,6 +103,9 @@ class ImageSequenceDataset(Dataset):
 
         self.mean = mean
         self.std = std
+
+        self.delta_mean = delta_mean
+        self.delta_std = delta_std 
 
         # Image transformations: Resize and Normalize
 
@@ -121,6 +139,12 @@ class ImageSequenceDataset(Dataset):
         #TODO fix normalization to normalizing by mean and std of sequences in train set
         sequence = torch.tensor(sequence, dtype=torch.float32)
         sequence_normalized = (sequence - torch.tensor(self.mean, dtype=torch.float32)) / torch.tensor(self.std, dtype=torch.float32)
+        delta = torch.max(sequence) - torch.min(sequence)
+        # print(f"Delta: {delta}")
+        # print(f"delta_mean: {self.delta_mean}")
+        # print(f"delta_std: {self.delta_std}")
+        delta_norm = (delta - torch.tensor(self.delta_mean, dtype=torch.float32)) / torch.tensor(self.delta_std, dtype=torch.float32)
+        # print(f"delta_norm: {delta_norm}")
 
         row = self.target_df.loc[self.target_df['curve_idx'] == curve_idx]
         target = torch.tensor(row['groundtruth_target'].values[0], dtype=torch.float)
@@ -130,7 +154,7 @@ class ImageSequenceDataset(Dataset):
             igi_fn = torch.tensor(row['igi_fn'].values[0], dtype=torch.float)
             target = torch.stack([target, igi_fp, igi_fn], dim=0)
 
-        return (curve_img, sequence_normalized.unsqueeze(1)), target
+        return (curve_img, delta_norm), target
     
 class ImageDataModule(pl.LightningDataModule):
     """
@@ -139,6 +163,7 @@ class ImageDataModule(pl.LightningDataModule):
     """
     def __init__(self, curve_dict_path, target_df_path, batch_size=32, shuffle=True, num_workers=4, igi_call=False):
         super().__init__()
+
         self.batch_size = batch_size
         self.shuffle = shuffle
         self.num_workers = num_workers
@@ -225,6 +250,7 @@ class ImageDataset(Dataset):
         return len(self.curve_dict.keys())
     
     def __getitem__(self, idx):
+
         curve_idx = list(self.curve_dict.keys())[idx]
 
         # Image processing

@@ -15,6 +15,7 @@ import multiprocessing
 #python scripts/pcr_dispatcher.py --config_path configs/gene_fusion_sweep.json --num_workers 4
 #python scripts/pcr_dispatcher.py --config_path configs/gene_fusion_heads_sweep.json --num_workers 5
 #python scripts/pcr_dispatcher.py --config_path configs/img_sweep.json --num_workers 4
+#python scripts/pcr_dispatcher.py --config_path configs/img_range_sweep.json --num_workers 4
 
 def add_main_args(parser: argparse.ArgumentParser) -> argparse.ArgumentParser:
     parser.add_argument(
