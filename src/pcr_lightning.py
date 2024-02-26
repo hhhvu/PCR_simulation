@@ -29,8 +29,8 @@ class Classifier(pl.LightningModule):
         x, y = self.get_xy(batch)
 
         ## TODO: get predictions from your model and store them as y_hat
-        y_hat = self.forward(*x)
-        #y_hat = self.forward(x)
+        #y_hat = self.forward(*x)
+        y_hat = self.forward(x)
         loss = sum(self.loss(y_hat[:,i],y[:,i]) for i in range(3))
 
         self.log('train_loss', loss, prog_bar=True, sync_dist=True)
@@ -45,8 +45,8 @@ class Classifier(pl.LightningModule):
     def validation_step(self, batch, batch_idx):
         x, y = self.get_xy(batch)
 
-        y_hat = self.forward(*x)
-        #y_hat = self.forward(x)
+        #y_hat = self.forward(*x)
+        y_hat = self.forward(x)
         loss = sum(self.loss(y_hat[:,i],y[:,i]) for i in range(3))
 
         self.log('val_loss', loss, prog_bar=True, sync_dist=True)
@@ -60,7 +60,8 @@ class Classifier(pl.LightningModule):
     def test_step(self, batch, batch_idx):
         x, y = self.get_xy(batch)
 
-        y_hat = self.forward(*x)
+        #y_hat = self.forward(*x)
+        y_hat = self.forward(x)
 
         #loss = self.loss(y_hat,y)
         loss = sum(self.loss(y_hat[:,i],y[:,i]) for i in range(3))
@@ -338,7 +339,7 @@ class SeqModel(Classifier):
         # Prediction heads
         self.heads = nn.ModuleList([nn.Linear(64, 1) for _ in range(num_heads)])
 
-    def forward(self, image, sequence, genes):
+    def forward(self, sequence): #image, genes
         # Sequence processing
         lstm_out, _ = self.lstm(sequence)
         seq_latent = self.lstm_fc(lstm_out[:, -1, :])  # Taking the last output from LSTM for the whole sequence
@@ -760,12 +761,16 @@ class CurveShapeDeltaModel(Classifier):
         # Fusion of image and sequence representations
         self.fc = nn.Sequential(
             nn.Linear(neural_net_input, 512),  # Concatenated vectors are of size 1024 (512 from image + 512 from sequence)
+            nn.Dropout(0.2),  # Add BatchNorm after Linear layer
             nn.ReLU(),
             nn.Linear(512, 256),
+            #nn.BatchNorm1d(256),  # Add BatchNorm after Linear layer
             nn.ReLU(),
             nn.Linear(256, 128),
+            #nn.BatchNorm1d(128),  # Add BatchNorm after Linear layer
             nn.ReLU(),
             nn.Linear(128, 64),
+            #nn.BatchNorm1d(64),  # Add BatchNorm after Linear layer
             nn.ReLU(),
             # nn.Linear(64, 1),
             # nn.Sigmoid()
@@ -774,14 +779,16 @@ class CurveShapeDeltaModel(Classifier):
         # Prediction heads
         self.heads = nn.ModuleList([nn.Linear(64, 1) for _ in range(num_heads)])
 
-    def forward(self, image, sequence):
+    def forward(self, image, delta_latent):
         # Image processing
         img_latent = self.vit_classifier(self.vit(image))
 
         # Calculating delta
-        delta_latent = torch.max(sequence, dim=1)[0] - torch.min(sequence, dim=1)[0]
+        #delta_latent = torch.max(sequence, dim=1)[0] - torch.min(sequence, dim=1)[0]
+        #TODO add code to normalize the latent
+        delta_latent = delta_latent.unsqueeze(-1)
+        #print(delta_latent.shape)
         delta_latent = delta_latent.expand((-1, self.delta))
-
         # Fusion
         fusion = torch.cat((img_latent, delta_latent), dim=1)
         output = self.fc(fusion)

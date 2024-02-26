@@ -10,7 +10,7 @@ import numpy as np
 
 sys.path.append(dirname(dirname(realpath(__file__))))
 from src.pcr_lightning import FusionModel, GeneFusionModel, GeneFusionHeadsModel, GeneEnsembleModel, CurveShapeModel, CurveShapeDeltaModel, SeqModel, SeqDeltaModel, SeqCurveModel, SeqDeltaGeneModel, SeqGeneModel, SeqCurveGeneModel, TransformerModel
-from src.pcr_dataset import ImageSequenceDataModule, ImageSequenceGeneDataModule, ImageDataModule
+from src.pcr_dataset import ImageSequenceDataModule, ImageSequenceGeneDataModule, ImageDataModule, SequenceDataModule
 from lightning.pytorch.cli import LightningArgumentParser
 from lightning.pytorch.accelerators import find_usable_cuda_devices
 import lightning.pytorch as pl
@@ -34,7 +34,8 @@ NAME_TO_MODEL_CLASS = {
 NAME_TO_DATASET_CLASS = {
     "imgseq": ImageSequenceDataModule,
     "imgseqgene": ImageSequenceGeneDataModule,
-    "img": ImageDataModule
+    "img": ImageDataModule,
+    'seq_data': SequenceDataModule
 }
 
 # CUDA_VISIBLE_DEVICES=0 python scripts/pcr_train_script.py --project_name pcr-classification --experiment_name FusionModel_Test --train --trainer.max_epochs 10
@@ -42,17 +43,16 @@ NAME_TO_DATASET_CLASS = {
 
 #python scripts/pcr_train_script.py --project_name pcr-classification_fusion_test --experiment_name FusionModel_Test --train --trainer.max_epochs 1 --gene_fusion.init_lr 1e-5 --gene_fusion.hidden_size 512 --gene_fusion.latent_dim 32 --gene_fusion.num_layers 10  --model_name gene_fusion --dataset_name imgseqgene --grid_search
 
+#python scripts/pcr_train_script.py --project_name pcr-classification_Seq_large --experiment_name SeqModelLargeData_Test --train --trainer.max_epochs 50 --model_name seq --dataset_name seq_data --grid_search --igi_call true
+#python scripts/pcr_train_script.py --project_name pcr-classification_Seq_large --experiment_name SeqModelOldData_Test --train --trainer.max_epochs 50 --model_name seq --dataset_name seq_data --grid_search --igi_call true
+
 #conda create -n PCR_v2 python=3.9
 
 # Train command
 # CUDA_VISIBLE_DEVICES=7 python scripts/pcr_train_script.py --project_name pcr-classification_fusion_test --experiment_name GeneFusionHeadsModel_Test --train --trainer.max_epochs 50 --gene_fusion_heads.init_lr 1e-4 --gene_fusion_heads.hidden_size 512 --gene_fusion_heads.latent_dim 512 --gene_fusion_heads.num_layers 3 --gene_fusion_heads.delta 64 --model_name gene_fusion_heads --dataset_name imgseqgene --igi_call true
-
 # python -m pdb -c continue scripts/pcr_train_script.py --train --grid_search --project_name pcr-classification_image --experiment_name ImgModel_Test --trainer.max_epochs 50 --model_name curve --dataset_name img --igi_call true
-
-# python -m pdb -c continue scripts/pcr_train_script.py --train --grid_search --project_name pcr-classification_image_range --experiment_name ImgRangeModel --trainer.max_epochs 50 --model_name curve_delta --dataset_name imgseq --igi_call true
-
+# CUDA_VISIBLE_DEVICES=1 python -m pdb -c continue scripts/pcr_train_script.py --train --grid_search --project_name pcr-classification_image_range --experiment_name ImgRangeModel --trainer.max_epochs 50 --model_name curve_delta --dataset_name imgseq --igi_call true
 # python -m pdb -c continue scripts/pcr_train_script.py --project_name pcr-classification_image --experiment_name ImgModel_Save_3_head --trainer.max_epochs 100 --model_name curve --dataset_name img --igi_call true --curve.latent_dim 1024 --curve.init_lr 1e-5 --checkpoint_path pcr-classification_image/d73jmc6v/checkpoints/epoch=11-step=660.ckpt 
-
 # python -m pdb -c continue scripts/pcr_train_script.py --train --project_name pcr-classification_image --experiment_name ImgModel_Save_3_head --trainer.max_epochs 100 --model_name curve --dataset_name img --igi_call true --curve.latent_dim 1024 --curve.init_lr 1e-5
 
 # Eval command
@@ -153,8 +153,8 @@ def main(args: argparse.Namespace):
     dataset_args = vars(args[args.dataset_name])
     # dataset_args['use_data_augmentation'] = bool(args.use_data_augmentation)
     dataset_args['batch_size'] = int(args.batch_size)
-    dataset_args['curve_dict_path'] = 'data/groundtruth_df_curve_dict_split_v2.pkl'
-    dataset_args['target_df_path'] = 'data/groundtruth_df_target_data_split_v2.csv'
+    dataset_args['curve_dict_path'] =  'data/new_groundtruth_df_curve_dict_fn.pkl' #'data/groundtruth_df_curve_dict_split_v2.pkl' 
+    dataset_args['target_df_path'] = 'data/new_groundtruth_df_target_data.csv' #'data/groundtruth_df_target_data_split_v2.csv
     dataset_args['igi_call'] = (args.igi_call == 'true')
 
     datamodule = NAME_TO_DATASET_CLASS[args.dataset_name](**dataset_args)
@@ -196,12 +196,12 @@ def main(args: argparse.Namespace):
         print("Training model")
         trainer.fit(model, datamodule)
 
-    print("Best model checkpoint path: ", trainer.checkpoint_callback.best_model_path)
+    #print("Best model checkpoint path: ", trainer.checkpoint_callback.best_model_path)
 
     print("Evaluating model on validation set")
     trainer.validate(model, datamodule)
     val_results = model.validation_outputs
-    print("******val results******", val_results)
+    #print("******val results******", val_results)
 
     # print("Evaluating model on test set")
     # trainer.test(model, datamodule)
