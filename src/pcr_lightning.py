@@ -5,6 +5,7 @@ import torch.nn.functional as F
 import torchmetrics
 import torchvision
 from torchvision import models
+import math as math
 
 class Classifier(pl.LightningModule):
     def __init__(self, num_classes=2, init_lr=1e-4):
@@ -123,25 +124,39 @@ class Classifier(pl.LightningModule):
         # return {'optimizer': optimizer, 'lr_scheduler': {'scheduler': scheduler, 'monitor':'val_loss'}}
         return optimizer
 
+
+##################################################
+## Transformer model
+    
+class PositionalEncoding(nn.Module):
+    def __init__(self, d_model, max_len=5000):
+        super(PositionalEncoding, self).__init__()
+        pe = torch.zeros(max_len, d_model)
+        position = torch.arange(0, max_len, dtype=torch.float).unsqueeze(1)
+        div_term = torch.exp(torch.arange(0, d_model, 2).float() * -(math.log(10000.0) / d_model))
+        pe[:, 0::2] = torch.sin(position * div_term)
+        pe[:, 1::2] = torch.cos(position * div_term)
+        pe = pe.unsqueeze(0).transpose(0, 1)
+        self.register_buffer('pe', pe)
+
+    def forward(self, x):
+        x = x + self.pe[:x.size(0), :]
+        return x
+
 class TransformerModel(Classifier):
-    def __init__(self, d_model=1, nhead=8, num_encoder_layers=6, num_decoder_layers=6, dim_feedforward=2048, sequence_length=40, genes=6, num_heads=3, init_lr=1e-4):
+    def __init__(self, d_model=512, nhead=8, num_encoder_layers=3, dim_feedforward=512, dropout=0.2, max_seq_length=40, init_lr=1e-4, num_heads=3):
         super().__init__(num_classes=2, init_lr=init_lr)
-        self.save_hyperparameters()
+        self.num_classes = 2
+        self.init_lr = init_lr
+        input_channels = 1
+        
+        self.pos_encoder = PositionalEncoding(d_model, max_seq_length)
+        encoder_layers = nn.TransformerEncoderLayer(d_model, nhead, dim_feedforward, dropout)
+        self.transformer_encoder = nn.TransformerEncoder(encoder_layers, num_encoder_layers)
+        self.input_proj = nn.Linear(input_channels, d_model)
 
-        self.dim_feedforward = dim_feedforward
-
-        # Sequence processing via Transformer
-        self.transformer = nn.Transformer(d_model=d_model, nhead=nhead, num_encoder_layers=num_encoder_layers, 
-                                          num_decoder_layers=num_decoder_layers, dim_feedforward=dim_feedforward, batch_first=True)
-
-        # Caluclate neural_net input size after appending genes and delta latent
-        neural_net_input = dim_feedforward + genes
-
-        # Fusion of image and sequence representations
         self.fc = nn.Sequential(
-            nn.Linear(neural_net_input, 512),  # Concatenated vectors are of size 1024 (512 from image + 512 from sequence)
-            nn.ReLU(),
-            nn.Linear(512, 256),
+            nn.Linear(d_model, 256),
             nn.ReLU(),
             nn.Linear(256, 128),
             nn.ReLU(),
@@ -154,19 +169,15 @@ class TransformerModel(Classifier):
         # Prediction heads
         self.heads = nn.ModuleList([nn.Linear(64, 1) for _ in range(num_heads)])
 
-    def forward(self, image, sequence, genes):
-        # Sequence processing
-        print(sequence.shape)
-        print(sequence[:,1:,:].shape)
-        trans_out = self.transformer(sequence, sequence[:,1:,:])
-        print(trans_out.shape)
-        raise ArithmeticError
-        # Fusion
-        # fusion = seq_latent
-        fusion = torch.cat((trans_out, genes.squeeze(1)), dim=1)
-        # fusion = torch.cat((img_latent, seq_latent, genes.squeeze(1), seq_latent_delta), dim=1)
-        output = self.fc(fusion)
+    def forward(self, x):
+        # Adjust x's shape to [batch_size, seq_len, input_channels] if not already
+        # It is [32, 40, 1] right now
 
+        x = self.input_proj(x)  # Now x is [batch_size, seq_len, d_model]
+        x = self.pos_encoder(x)
+        x = self.transformer_encoder(x)
+        x = x.mean(dim=1)  # Aggregate features across the sequence
+        output = self.fc(x)
         # Get predictions for each head
         outputs = torch.stack([torch.sigmoid(head(output)) for head in self.heads], dim=-1)
 
@@ -179,6 +190,7 @@ class TransformerModel(Classifier):
         self.log("val_auc", self.auc(y_hat[:,0], y[:,0]), sync_dist=True, prog_bar=True)
         self.log("val_acc", self.accuracy(y_hat[:,0], y[:,0]), sync_dist=True, prog_bar=True)
         self.validation_outputs = []
+
 
 class FusionModel(Classifier):
     """
@@ -895,5 +907,4 @@ class GeneEnsembleModel(Classifier):
         x = torch.cat(x + [igi_call.view(-1, 1)], dim=1)
         x = torch.sigmoid(self.fc(x))
         return x.squeeze()
-    
     

@@ -68,3 +68,9 @@ output
 wandb
 pcr-classification/
 pcr-classification_fusion_test/
+pcr-classification_seq/
+pcr-classification_seq_curve/
+pcr-classification_seq_curve_gene/
+pcr-classification_seq_delta_gene/
+pcr-classification_seq_gene/
+data/
