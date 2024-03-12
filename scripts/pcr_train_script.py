@@ -10,7 +10,7 @@ import numpy as np
 
 sys.path.append(dirname(dirname(realpath(__file__))))
 from src.pcr_lightning import FusionModel, GeneFusionModel, GeneFusionHeadsModel, GeneEnsembleModel, CurveShapeModel, CurveShapeDeltaModel, SeqModel, SeqDeltaModel, SeqCurveModel, SeqDeltaGeneModel, SeqGeneModel, SeqCurveGeneModel, TransformerModel
-from src.pcr_dataset import ImageSequenceDataModule, ImageSequenceGeneDataModule, ImageDataModule, SequenceDataModule
+from src.pcr_dataset import ImageSequenceDataModule, ImageSequenceGeneDataModule, ImageDataModule, SequenceDataModule, SequenceGeneDataModule
 from lightning.pytorch.cli import LightningArgumentParser
 from lightning.pytorch.accelerators import find_usable_cuda_devices
 import lightning.pytorch as pl
@@ -35,7 +35,8 @@ NAME_TO_DATASET_CLASS = {
     "imgseq": ImageSequenceDataModule,
     "imgseqgene": ImageSequenceGeneDataModule,
     "img": ImageDataModule,
-    'seq_data': SequenceDataModule
+    'seq_data': SequenceDataModule,
+    "seqgene": SequenceGeneDataModule
 }
 
 # CUDA_VISIBLE_DEVICES=0 python scripts/pcr_train_script.py --project_name pcr-classification --experiment_name FusionModel_Test --train --trainer.max_epochs 10
@@ -45,6 +46,10 @@ NAME_TO_DATASET_CLASS = {
 
 #python scripts/pcr_train_script.py --project_name pcr-classification_Seq_large --experiment_name SeqModelLargeData_Test --train --trainer.max_epochs 50 --model_name seq --dataset_name seq_data --grid_search --igi_call true
 #python scripts/pcr_train_script.py --project_name pcr-classification_Seq_large --experiment_name SeqModelOldData_Test --train --trainer.max_epochs 50 --model_name seq --dataset_name seq_data --grid_search --igi_call true
+
+# CUDA_VISIBLE_DEVICES=7 python scripts/pcr_train_script.py --train --project_name pcr-classification_seq_gene_large --batch_size 32 --trainer.max_epochs 50 --model_name seq_gene --dataset_name seqgene --igi_call true --seq_gene.init_lr 0.0001 --seq_gene.num_heads 3 --seq_gene.num_layers 5 --seq_gene.latent_dim 512 --experiment_name SeqGeneModelNewData
+# CUDA_VISIBLE_DEVICES=7 python scripts/pcr_train_script.py --train --project_name pcr-classification_seq_gene_large --batch_size 32 --trainer.max_epochs 50 --model_name seq_gene --dataset_name seqgene --igi_call true --seq_gene.init_lr 0.0001 --seq_gene.num_heads 3 --seq_gene.num_layers 3 --seq_gene.latent_dim 1024 --experiment_name SeqGeneModelNewData2
+
 
 #conda create -n PCR_v2 python=3.9
 

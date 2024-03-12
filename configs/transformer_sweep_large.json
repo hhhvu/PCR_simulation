@@ -1,0 +1,36 @@
+{ 
+  "main.project_name": [
+    "pcr-classification_transformer_large"
+  ],
+  "main.batch_size": [
+    32
+  ],
+  "trainer.max_epochs": [
+    50
+  ],
+  "main.model_name": [
+    "transformer"
+  ],
+  "main.dataset_name": [
+    "seq_data"
+  ],
+  "main.igi_call": [
+    "true"
+  ],
+  "transformer.init_lr": [
+    1e-5
+  ],
+  "transformer.num_encoder_layers": [
+    3,
+    8,
+    12
+  ],
+  "transformer.dim_feedforward": [
+    128,
+    512,
+    1024
+  ],
+  "transformer.dropout": [
+    0.2
+  ]
+}

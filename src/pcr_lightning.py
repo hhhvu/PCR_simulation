@@ -30,8 +30,8 @@ class Classifier(pl.LightningModule):
         x, y = self.get_xy(batch)
 
         ## TODO: get predictions from your model and store them as y_hat
-        #y_hat = self.forward(*x)
-        y_hat = self.forward(x)
+        y_hat = self.forward(*x)
+        # y_hat = self.forward(x)
         loss = sum(self.loss(y_hat[:,i],y[:,i]) for i in range(3))
 
         self.log('train_loss', loss, prog_bar=True, sync_dist=True)
@@ -46,8 +46,8 @@ class Classifier(pl.LightningModule):
     def validation_step(self, batch, batch_idx):
         x, y = self.get_xy(batch)
 
-        #y_hat = self.forward(*x)
-        y_hat = self.forward(x)
+        y_hat = self.forward(*x)
+        # y_hat = self.forward(x)
         loss = sum(self.loss(y_hat[:,i],y[:,i]) for i in range(3))
 
         self.log('val_loss', loss, prog_bar=True, sync_dist=True)
@@ -600,7 +600,7 @@ class SeqGeneModel(Classifier):
         # Prediction heads
         self.heads = nn.ModuleList([nn.Linear(64, 1) for _ in range(num_heads)])
 
-    def forward(self, image, sequence, genes):
+    def forward(self, sequence, genes):
         # Sequence processing
         lstm_out, _ = self.lstm(sequence)
         seq_latent = self.lstm_fc(lstm_out[:, -1, :])  # Taking the last output from LSTM for the whole sequence
