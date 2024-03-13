@@ -382,12 +382,13 @@ class SequenceDataModule(pl.LightningDataModule):
         Pytorch Lightning DataModule for Image+Sequence dataset. This will download the dataset, prepare data loaders and apply
         data augmentation.
     """
-    def __init__(self, curve_dict_path, target_df_path, batch_size=32, shuffle=True, num_workers=4, igi_call=False):
+    def __init__(self, curve_dict_path, target_df_path, batch_size=32, shuffle=True, num_workers=4, igi_call=False, gen_preds=False):
         super().__init__()
         self.batch_size = batch_size
         self.shuffle = shuffle
         self.num_workers = num_workers
         self.igi_call = igi_call
+        self.gen_preds = gen_preds
 
         print("WE ARE USING THE SEQUENCE DATASET")
 
@@ -425,9 +426,9 @@ class SequenceDataModule(pl.LightningDataModule):
 
     def setup(self, stage=None):
         print("SETUP DONE")
-        self.train = SequenceDataset(self.curve_dict_train, self.target_df_train, igi_call=self.igi_call, mean=self.norm_mean, std=self.norm_std)
-        self.val = SequenceDataset(self.curve_dict_val, self.target_df_val, igi_call=self.igi_call, mean=self.norm_mean, std=self.norm_std)
-        self.test = SequenceDataset(self.curve_dict_test, self.target_df_test, igi_call=self.igi_call, mean=self.norm_mean, std=self.norm_std)
+        self.train = SequenceDataset(self.curve_dict_train, self.target_df_train, igi_call=self.igi_call, mean=self.norm_mean, std=self.norm_std, gen_preds=self.gen_preds)
+        self.val = SequenceDataset(self.curve_dict_val, self.target_df_val, igi_call=self.igi_call, mean=self.norm_mean, std=self.norm_std, gen_preds=self.gen_preds)
+        self.test = SequenceDataset(self.curve_dict_test, self.target_df_test, igi_call=self.igi_call, mean=self.norm_mean, std=self.norm_std, gen_preds=self.gen_preds)
 
     def train_dataloader(self):
         return DataLoader(self.train, batch_size=self.batch_size, shuffle=True, num_workers = self.num_workers)
@@ -439,7 +440,7 @@ class SequenceDataModule(pl.LightningDataModule):
         return DataLoader(self.test, batch_size=self.batch_size, shuffle=False, num_workers = self.num_workers)
 
 class SequenceDataset(Dataset):
-    def __init__(self, curve_dict, target_df, sequence_len=40, igi_call=False, mean=0, std=1): #img_directory = 'data/curve_imgs/',
+    def __init__(self, curve_dict, target_df, sequence_len=40, igi_call=False, mean=0, std=1, gen_preds=False): #img_directory = 'data/curve_imgs/',
         self.curve_dict = curve_dict
         self.target_df = target_df
 
@@ -454,6 +455,7 @@ class SequenceDataset(Dataset):
         self.mean = mean
         self.std = std
         self.igi_call = igi_call
+        self.gen_preds = gen_preds
 
         # Image transformations: Resize and Normalize
         self.img_transforms = transforms.Compose([
@@ -490,7 +492,10 @@ class SequenceDataset(Dataset):
             igi_fn = torch.tensor(row['igi_fn'].values[0], dtype=torch.float)
             target = torch.stack([target, igi_fp, igi_fn], dim=0)
 
-        return (sequence_normalized.unsqueeze(1)), target, curve_idx
+        if self.gen_preds:
+            return (sequence_normalized.unsqueeze(1)), target, curve_idx
+        else:
+            return (sequence_normalized.unsqueeze(1)), target
 
 
 class SequenceGeneDataModule(pl.LightningDataModule):
@@ -498,12 +503,13 @@ class SequenceGeneDataModule(pl.LightningDataModule):
         Pytorch Lightning DataModule for Gene+Sequence dataset. This will download the dataset, prepare data loaders and apply
         data augmentation.
     """
-    def __init__(self, curve_dict_path, target_df_path, batch_size=32, shuffle=True, num_workers=4, igi_call=False):
+    def __init__(self, curve_dict_path, target_df_path, batch_size=32, shuffle=True, num_workers=4, igi_call=False, gen_preds=False):
         super().__init__()
         self.batch_size = batch_size
         self.shuffle = shuffle
         self.num_workers = num_workers
         self.igi_call = igi_call
+        self.gen_preds = gen_preds
 
         print("WE ARE USING THE SEQUENCE GENE DATASET")
 
@@ -541,9 +547,9 @@ class SequenceGeneDataModule(pl.LightningDataModule):
         return
 
     def setup(self, stage=None):
-        self.train = SequenceGeneDataset(self.curve_dict_train, self.target_df_train, igi_call=self.igi_call, mean=self.norm_mean, std=self.norm_std)
-        self.val = SequenceGeneDataset(self.curve_dict_val, self.target_df_val, igi_call=self.igi_call, mean=self.norm_mean, std=self.norm_std)
-        self.test = SequenceGeneDataset(self.curve_dict_test, self.target_df_test, igi_call=self.igi_call, mean=self.norm_mean, std=self.norm_std)
+        self.train = SequenceGeneDataset(self.curve_dict_train, self.target_df_train, igi_call=self.igi_call, mean=self.norm_mean, std=self.norm_std, gen_preds=self.gen_preds)
+        self.val = SequenceGeneDataset(self.curve_dict_val, self.target_df_val, igi_call=self.igi_call, mean=self.norm_mean, std=self.norm_std, gen_preds=self.gen_preds)
+        self.test = SequenceGeneDataset(self.curve_dict_test, self.target_df_test, igi_call=self.igi_call, mean=self.norm_mean, std=self.norm_std, gen_preds=self.gen_preds)
 
     def train_dataloader(self):
         return DataLoader(self.train, batch_size=self.batch_size, shuffle=True, num_workers = self.num_workers)
@@ -556,9 +562,10 @@ class SequenceGeneDataModule(pl.LightningDataModule):
 
 class SequenceGeneDataset(Dataset):
     def __init__(self, curve_dict, target_df, sequence_len=40, igi_call=False,
-                 mean=0, std=1):
+                 mean=0, std=1, gen_preds=False):
         self.curve_dict = curve_dict
         self.target_df = target_df
+        self.gen_preds = gen_preds
 
         #one-hot encode gene indicator
         self.one_hot = pd.get_dummies(self.target_df['target'], prefix='target')
@@ -594,4 +601,7 @@ class SequenceGeneDataset(Dataset):
             igi_fn = torch.tensor(row['igi_fn'].values[0], dtype=torch.float)
             target = torch.stack([target, igi_fp, igi_fn], dim=0)
 
-        return (sequence_normalized.unsqueeze(1), gene_type.squeeze(1)), target
+        if self.gen_preds:
+            return (sequence_normalized.unsqueeze(1), gene_type.squeeze(1)), target, curve_idx
+        else:
+            return (sequence_normalized.unsqueeze(1), gene_type.squeeze(1)), target
