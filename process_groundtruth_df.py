@@ -3,7 +3,7 @@ import pandas as pd
 import pickle
 from tqdm import tqdm
 
-#scp -i ~/.ssh/my_private_key.pem Users/alexa/Downloads/new_groundtruth_df.csv alexberkeley@18.144.168.54:/home/alexberkeley/PCR_simulation/data
+#scp -i ~/.ssh/my_private_key.pem Users/alexa/Downloads/new_groundtruth_df.csv alexberkeley@13.57.176.147:/home/alexberkeley/PCR_simulation/data
 
 
 if __name__ == "__main__":
