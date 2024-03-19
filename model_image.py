@@ -27,7 +27,7 @@ from tqdm.contrib.concurrent import process_map  # For progress bar with multipr
 # Define a function for generating and saving a single image
 def save_curve_as_image(curve_idx):
     sequence = curve_dict[curve_idx][:40]
-    imgs_folder = 'data/curve_imgs_new'
+    imgs_folder = 'data/curve_imgs_new_cleaner'
     if not os.path.exists(imgs_folder):
         os.makedirs(imgs_folder, exist_ok=True)  # Ensure thread-safe directory creation
     plt.plot(sequence, linewidth=6)
@@ -131,11 +131,11 @@ if __name__ == "__main__":
     # with open('data/groundtruth_df_curve_dict_split_v2.pkl', 'rb') as file:
     #     curve_dict = pkl.load(file)
     
-    with open('data/new_full_curve_dict_fn.pkl', 'rb') as file:
+    with open('data/new_full_curve_dict_fn_v1.pkl', 'rb') as file:
         curve_dict = pkl.load(file)
 
     #target_df = pd.read_csv('data/groundtruth_df_target_data_split_v2.csv')
-    target_df = pd.read_csv('data/new_groundtruth_df_target_data.csv')
+    target_df = pd.read_csv('data/new_groundtruth_df_target_data_v1.csv')
     
     ###########################################
     ## Get the right normalization values
@@ -161,7 +161,7 @@ if __name__ == "__main__":
     ## Save curves as images
     ###########################################
 
-    imgs_folder = 'data/curve_imgs_new'
+    imgs_folder = 'data/curve_imgs_new_cleaner'
 
     curve_indices = list(curve_dict.keys())
 
