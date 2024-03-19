@@ -42,6 +42,11 @@ NAME_TO_DATASET_CLASS = {
 # Eval command
 # python -m pdb -c continue scripts/pcr_train_script.py --project_name pcr-classification_image --experiment_name ImgModel_Save_3_head --trainer.max_epochs 100 --model_name curve --dataset_name img --igi_call true --curve.latent_dim 1024 --curve.init_lr 1e-5 --checkpoint_path pcr-classification_image/d73jmc6v/checkpoints/epoch=11-step=660.ckpt 
 
+# Alex Eval command
+# python x03a_generate_test_preds_pl.py --model_name curve --dataset_name img --igi_call true --checkpoint_path  pcr-classification_image/jqz39dg2/checkpoints/epoch=8-step=1674.ckpt
+# python x03a_generate_test_preds_pl.py --model_name seq --dataset_name seq_data --igi_call true --checkpoint_path  pcr-classification_seq_large/lr1e5_run/checkpoints/epoch=40-step=7626.ckpt
+# python x03a_generate_test_preds_pl.py --model_name seq_gene --dataset_name seqgene --igi_call true --checkpoint_path  pcr-classification_seq_gene_large/7cr116dt/checkpoints/epoch=48-step=9114.ckpt
+
 # Saathvik Eval command
 # CUDA_VISIBLE_DEVICES=6 python x03a_generate_test_preds_pl.py --model_name seq --dataset_name seq_data --igi_call true --checkpoint_path pcr-classification_Seq_large/4zj4iny9/checkpoints/epoch=45-step=278254.ckpt
 
@@ -142,8 +147,8 @@ def main(args: argparse.Namespace):
     dataset_args['batch_size'] = int(args.batch_size)
     # dataset_args['curve_dict_path'] = 'data/groundtruth_df_curve_dict_split_v2.pkl'
     # dataset_args['target_df_path'] = 'data/groundtruth_df_target_data_split_v2.csv'
-    dataset_args['curve_dict_path'] =  'data/new_groundtruth_df_curve_dict_fn.pkl'
-    dataset_args['target_df_path'] = 'data/new_groundtruth_df_target_data.csv'
+    dataset_args['curve_dict_path'] =  'data/new_groundtruth_df_curve_dict_fn_v1.pkl'
+    dataset_args['target_df_path'] = 'data/new_groundtruth_df_target_data_v1.csv'
     dataset_args['igi_call'] = (args.igi_call == 'true')
     dataset_args['gen_preds'] = True
 
@@ -151,10 +156,11 @@ def main(args: argparse.Namespace):
     # datamodule = NAME_TO_DATASET_CLASS[args.dataset_name](**vars(args[args.dataset_name]))
 
     print("Initializing model")
+    print(args.checkpoint_path)
     ## TODO: Implement your deep learning methods
     # args.checkpoint_path = 'pcr-classification_Seq_large/4zj4iny9/checkpoints/epoch=45-step=278254.ckpt'
     # args.checkpoint_path = 'pcr-classification_seq_gene_large/vwzr2fyt/checkpoints/SeqGeneModelLarge_ep70.ckpt'
-    args.checkpoint_path = 'pcr-classification_seq_gene_large/gdhmjdes/checkpoints/SeqGeneModelLarge2_ep70.ckpt'
+    #args.checkpoint_path = 'pcr-classification_seq_gene_large/gdhmjdes/checkpoints/SeqGeneModelLarge2_ep70.ckpt'
     model = NAME_TO_MODEL_CLASS[args.model_name].load_from_checkpoint(args.checkpoint_path)
 
     ##########################################
@@ -174,10 +180,12 @@ def main(args: argparse.Namespace):
 
         inputs, labels, ids = batch
         inputs = [x.to(device) for x in inputs]
+        #inputs = inputs.to(device)
 
         out = model(*inputs)
-        # print(out)
-        # print(out.shape)
+        #out = model(inputs)
+        #print(out)
+        #print(out.shape)
         # print(len(ids))
         probs.append(out[:,0].detach().cpu().numpy())
         igi_fp.append(out[:,1].detach().cpu().numpy())
@@ -202,8 +210,15 @@ def main(args: argparse.Namespace):
         inputs, labels, ids = batch
 
         inputs = [x.to(device) for x in inputs]
+        #inputs = inputs.to(device)
 
         out = model(*inputs)
+        #out = model(inputs)
+        if out.dim() == 1:
+            # Unsqueeze 'out' to have a shape of [1, 3]
+            out = out.unsqueeze(0)
+
+
         # print(out)
         # print(out.shape)
         # print(len(ids))
@@ -221,7 +236,7 @@ def main(args: argparse.Namespace):
 
     test_pred_df = pd.concat([val_pred_df, test_pred_df], ignore_index=True)
 
-    test_pred_df.to_csv('data/model_outputs/3_13_SeqGene_Model2_ep70_large_val_test_pred_df.csv', index = False)
+    test_pred_df.to_csv('data/model_outputs/3_18_Seq_Gene_Model_large_val_test_pred_df.csv', index = False)
 
     """
     print("Initializing trainer")
