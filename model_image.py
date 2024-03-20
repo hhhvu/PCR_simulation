@@ -27,7 +27,7 @@ from tqdm.contrib.concurrent import process_map  # For progress bar with multipr
 # Define a function for generating and saving a single image
 def save_curve_as_image(curve_idx):
     sequence = curve_dict[curve_idx][:40]
-    imgs_folder = 'data/curve_imgs_new_cleaner'
+    imgs_folder = 'data/curve_imgs_retest'
     if not os.path.exists(imgs_folder):
         os.makedirs(imgs_folder, exist_ok=True)  # Ensure thread-safe directory creation
     plt.plot(sequence, linewidth=6)
@@ -131,17 +131,18 @@ if __name__ == "__main__":
     # with open('data/groundtruth_df_curve_dict_split_v2.pkl', 'rb') as file:
     #     curve_dict = pkl.load(file)
     
-    with open('data/new_full_curve_dict_fn_v1.pkl', 'rb') as file:
+    with open('data/new_retest_curve_dict_1.pkl', 'rb') as file: #new_full_curve_dict_fn_v1.pkl
         curve_dict = pkl.load(file)
 
     #target_df = pd.read_csv('data/groundtruth_df_target_data_split_v2.csv')
-    target_df = pd.read_csv('data/new_groundtruth_df_target_data_v1.csv')
+    target_df = pd.read_csv('data/new_retest_df_target_data_1.csv') #new_groundtruth_df_target_data_v1.csv
     
     ###########################################
     ## Get the right normalization values
     ###########################################
 
-    target_df_filtered = target_df[target_df['split']=='train']
+    #target_df_filtered = target_df[target_df['split']=='train']
+    target_df_filtered = target_df[target_df['split']=='test']
     curve_dict_filtered = {k: curve_dict[k] for k in curve_dict.keys() if k in target_df_filtered['curve_idx'].values}
 
     mean_list = []
@@ -161,7 +162,7 @@ if __name__ == "__main__":
     ## Save curves as images
     ###########################################
 
-    imgs_folder = 'data/curve_imgs_new_cleaner'
+    #imgs_folder = 'data/curve_imgs_new_cleaner'
 
     curve_indices = list(curve_dict.keys())
 

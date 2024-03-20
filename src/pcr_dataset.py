@@ -161,13 +161,16 @@ class ImageDataModule(pl.LightningDataModule):
         Pytorch Lightning DataModule for Image+Sequence dataset. This will download the dataset, prepare data loaders and apply
         data augmentation.
     """
-    def __init__(self, curve_dict_path, target_df_path, batch_size=32, shuffle=True, num_workers=4, igi_call=False):
+    def __init__(self, curve_dict_path, target_df_path, batch_size=32, shuffle=True, num_workers=4, igi_call=False, gen_preds=False, img_directory = 'data/curve_imgs_new/', external=False):
         super().__init__()
 
         self.batch_size = batch_size
         self.shuffle = shuffle
         self.num_workers = num_workers
         self.igi_call = igi_call
+        self.gen_preds = gen_preds
+        self.img_directory = img_directory
+        self.external = external
 
         print("WE ARE USING THE IMAGE DATASET")
 
@@ -190,7 +193,12 @@ class ImageDataModule(pl.LightningDataModule):
         mean_list = []
         std_list = []
 
-        for key, curve in tqdm(self.curve_dict_train.items()):
+        if self.external:
+            rotation_dict = self.curve_dict_test
+        else:
+            rotation_dict = self.curve_dict_train
+
+        for key, curve in tqdm(rotation_dict.items()):
             mean_curve = np.array(curve).mean().item()
             std_curve = np.array(curve).std().item()
 
@@ -204,9 +212,9 @@ class ImageDataModule(pl.LightningDataModule):
         return
 
     def setup(self, stage=None):
-        self.train = ImageDataset(self.curve_dict_train, self.target_df_train, igi_call=self.igi_call, mean=self.norm_mean, std=self.norm_std)
-        self.val = ImageDataset(self.curve_dict_val, self.target_df_val, igi_call=self.igi_call, mean=self.norm_mean, std=self.norm_std)
-        self.test = ImageDataset(self.curve_dict_test, self.target_df_test, igi_call=self.igi_call, mean=self.norm_mean, std=self.norm_std)
+        self.train = ImageDataset(self.curve_dict_train, self.target_df_train, igi_call=self.igi_call, mean=self.norm_mean, std=self.norm_std, gen_preds=self.gen_preds, img_directory = self.img_directory)
+        self.val = ImageDataset(self.curve_dict_val, self.target_df_val, igi_call=self.igi_call, mean=self.norm_mean, std=self.norm_std, gen_preds=self.gen_preds, img_directory = self.img_directory)
+        self.test = ImageDataset(self.curve_dict_test, self.target_df_test, igi_call=self.igi_call, mean=self.norm_mean, std=self.norm_std, gen_preds=self.gen_preds, img_directory = self.img_directory)
 
     def train_dataloader(self):
         return DataLoader(self.train, batch_size=self.batch_size, shuffle=True, num_workers = self.num_workers)
@@ -219,10 +227,11 @@ class ImageDataModule(pl.LightningDataModule):
 
 class ImageDataset(Dataset):
     def __init__(self, curve_dict, target_df, img_directory = 'data/curve_imgs_new/', sequence_len=40, igi_call=True,
-                 mean=0, std=1):
+                 mean=0, std=1, gen_preds=False):
         
         self.curve_dict = curve_dict
         self.target_df = target_df
+        self.gen_preds = gen_preds
 
         #one-hot encode gene indicator
         self.one_hot = pd.get_dummies(self.target_df['target'], prefix='target')
@@ -266,7 +275,10 @@ class ImageDataset(Dataset):
             igi_fn = torch.tensor(row['igi_fn'].values[0], dtype=torch.float)
             target = torch.stack([target, igi_fp, igi_fn], dim=0)
 
-        return curve_img, target #, curve_idx
+        if self.gen_preds:
+            return curve_img, target, curve_idx
+        else:
+            return curve_img, target #, curve_idx
 
 class ImageSequenceGeneDataModule(pl.LightningDataModule):
     """
@@ -382,13 +394,14 @@ class SequenceDataModule(pl.LightningDataModule):
         Pytorch Lightning DataModule for Image+Sequence dataset. This will download the dataset, prepare data loaders and apply
         data augmentation.
     """
-    def __init__(self, curve_dict_path, target_df_path, batch_size=32, shuffle=True, num_workers=4, igi_call=False, gen_preds=False):
+    def __init__(self, curve_dict_path, target_df_path, batch_size=32, shuffle=True, num_workers=4, igi_call=False, gen_preds=False, external=False):
         super().__init__()
         self.batch_size = batch_size
         self.shuffle = shuffle
         self.num_workers = num_workers
         self.igi_call = igi_call
         self.gen_preds = gen_preds
+        self.external = external
 
         print("WE ARE USING THE SEQUENCE DATASET")
 
@@ -411,7 +424,12 @@ class SequenceDataModule(pl.LightningDataModule):
         mean_list = []
         std_list = []
 
-        for key, curve in tqdm(self.curve_dict_train.items()):
+        if self.external:
+            rotation_dict = self.curve_dict_test
+        else:
+            rotation_dict = self.curve_dict_train
+
+        for key, curve in tqdm(rotation_dict.items()):
             mean_curve = np.array(curve).mean().item()
             std_curve = np.array(curve).std().item()
 
@@ -503,13 +521,14 @@ class SequenceGeneDataModule(pl.LightningDataModule):
         Pytorch Lightning DataModule for Gene+Sequence dataset. This will download the dataset, prepare data loaders and apply
         data augmentation.
     """
-    def __init__(self, curve_dict_path, target_df_path, batch_size=32, shuffle=True, num_workers=4, igi_call=False, gen_preds=False):
+    def __init__(self, curve_dict_path, target_df_path, batch_size=32, shuffle=True, num_workers=4, igi_call=False, gen_preds=False, external=False):
         super().__init__()
         self.batch_size = batch_size
         self.shuffle = shuffle
         self.num_workers = num_workers
         self.igi_call = igi_call
         self.gen_preds = gen_preds
+        self.external = external
 
         print("WE ARE USING THE SEQUENCE GENE DATASET")
 
@@ -533,7 +552,12 @@ class SequenceGeneDataModule(pl.LightningDataModule):
         mean_list = []
         std_list = []
 
-        for key, curve in tqdm(self.curve_dict_train.items()):
+        if self.external:
+            rotation_dict = self.curve_dict_test
+        else:
+            rotation_dict = self.curve_dict_train
+
+        for key, curve in tqdm(rotation_dict.items()):
             mean_curve = np.array(curve).mean().item()
             std_curve = np.array(curve).std().item()
 
@@ -567,8 +591,24 @@ class SequenceGeneDataset(Dataset):
         self.target_df = target_df
         self.gen_preds = gen_preds
 
-        #one-hot encode gene indicator
-        self.one_hot = pd.get_dummies(self.target_df['target'], prefix='target')
+        # List of desired columns in specific order
+        columns_order = ['target_E gene', 'target_MS2', 'target_N gene', 
+                        'target_ORF1ab', 'target_RnaseP', 'target_S gene']
+
+        # Perform one-hot encoding
+        one_hot_encoded = pd.get_dummies(self.target_df['target'], prefix='target', dtype=int)
+
+        # Ensure all desired columns are present, even if some categories might be missing in the data
+        # This step fills in missing columns with 0s
+        for column in columns_order:
+            if column not in one_hot_encoded.columns:
+                one_hot_encoded[column] = pd.Series(0, index=one_hot_encoded.index, dtype=int)
+
+        # Reorder the columns to match the specified order
+        self.one_hot = one_hot_encoded[columns_order]
+
+        print(self.one_hot.head(10))
+        
         self.target_df = pd.concat([self.target_df, self.one_hot], axis=1)
 
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
