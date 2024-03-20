@@ -64,6 +64,11 @@ NAME_TO_DATASET_CLASS = {
 # python scripts/pcr_train_script.py --train --project_name pcr-classification_seq_gene_large --batch_size 128 --experiment_name SeqGeneModel_large_cleaned_data --trainer.max_epochs 50 --model_name seq_gene --dataset_name seqgene --igi_call true --seq_gene.init_lr 1e-4 --seq_gene.num_layers 5 --seq_gene.num_heads 3 --seq_gene.latent_dim 512 --seq_gene.hidden_size 512
 # python scripts/pcr_train_script.py --train --project_name pcr-classification_image --batch_size 128 --experiment_name ImageModel_large_cleaned_data --trainer.max_epochs 50 --model_name curve --dataset_name img --igi_call true --curve.init_lr 1e-5 --curve.num_layers 5 --curve.num_heads 3 --curve.latent_dim 512 --curve.hidden_size 512
 
+# CUDA_VISIBLE_DEVICES=5 python scripts/pcr_train_script.py --train --project_name pcr-classification_seq_large --batch_size 128 --experiment_name SeqModel_large_cleaned_data_no_invalid_1e5lr --trainer.max_epochs 50 --model_name seq --dataset_name seq_data --igi_call true --seq.init_lr 1e-5 --seq.num_layers 5 --seq.num_heads 3 --seq.latent_dim 1024 --seq.hidden_size 512 --seq_data.num_workers 8
+# CUDA_VISIBLE_DEVICES=5 python scripts/pcr_train_script.py --train --project_name pcr-classification_seq_gene_large --batch_size 128 --experiment_name SeqGeneModel_large_cleaned_data_no_invalid --trainer.max_epochs 50 --model_name seq_gene --dataset_name seqgene --igi_call true --seq_gene.init_lr 1e-4 --seq_gene.num_layers 5 --seq_gene.num_heads 3 --seq_gene.latent_dim 512 --seq_gene.hidden_size 512 --seqgene.num_workers 8
+# CUDA_VISIBLE_DEVICES=6,7 python scripts/pcr_train_script.py --train --project_name pcr-classification_image --batch_size 128 --experiment_name ImageModel_large_cleaned_data_no_invalid --trainer.max_epochs 50 --model_name curve --dataset_name img --igi_call true --curve.init_lr 1e-5 --curve.num_layers 5 --curve.num_heads 3 --curve.latent_dim 512 --curve.hidden_size 512 --img.num_workers 8
+
+
 # Eval command
 # CUDA_VISIBLE_DEVICES=7 python scripts/pcr_train_script.py --project_name pcr-classification_fusion_test --experiment_name GeneFusionHeadsModel_Test --checkpoint_path pcr-classification_fusion_test/kibnmcmb/checkpoints/epoch=43-step=19184.ckpt --gene_fusion_heads.init_lr 1e-4 --gene_fusion_heads.hidden_size 512 --gene_fusion_heads.latent_dim 512 --gene_fusion_heads.num_layers 3 --gene_fusion_heads.delta 64 --model_name gene_fusion_heads --dataset_name imgseqgene --igi_call true
 
@@ -162,8 +167,8 @@ def main(args: argparse.Namespace):
     dataset_args = vars(args[args.dataset_name])
     # dataset_args['use_data_augmentation'] = bool(args.use_data_augmentation)
     dataset_args['batch_size'] = int(args.batch_size)
-    dataset_args['curve_dict_path'] =  'data/new_groundtruth_df_curve_dict_fn_v1.pkl' #'data/groundtruth_df_curve_dict_split_v2.pkl' 
-    dataset_args['target_df_path'] = 'data/new_groundtruth_df_target_data_v1.csv' #'data/groundtruth_df_target_data_split_v2.csv
+    dataset_args['curve_dict_path'] =  'data/new_groundtruth_df_curve_dict_fn_no_invalid.pkl' #'data/groundtruth_df_curve_dict_split_v2.pkl' 
+    dataset_args['target_df_path'] = 'data/new_groundtruth_df_target_data_no_invalid.csv' #'data/groundtruth_df_target_data_split_v2.csv
     dataset_args['igi_call'] = (args.igi_call == 'true')
 
     datamodule = NAME_TO_DATASET_CLASS[args.dataset_name](**dataset_args)

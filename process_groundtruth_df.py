@@ -7,7 +7,8 @@ from tqdm import tqdm
 
 
 if __name__ == "__main__":
-    groundtruth_df = pd.read_csv('data/new_groundtruth_df_1.csv')
+    groundtruth_df = pd.read_csv('data/new_groundtruth_df_no_invalid.csv')
+    # groundtruth_df = pd.read_csv('data/new_groundtruth_df_1.csv')
     print(f"label data shape {groundtruth_df.shape}")
 
     curve_data = pd.read_hdf('data/new_data_1.h5',key = 'curve_data')
@@ -42,7 +43,7 @@ if __name__ == "__main__":
     print(target_data['sample_type'].unique())
     print(target_data.shape)
 
-    target_data.to_csv('data/new_groundtruth_df_target_data_v1.csv')
+    target_data.to_csv('data/new_groundtruth_df_target_data_no_invalid.csv')
 
     # target_df2 = pd.read_csv('data/groundtruth_df_target_data.csv') 
     # print(target_df2.sort_values(by="curve_idx").head())
@@ -86,14 +87,14 @@ if __name__ == "__main__":
     groundtruth_curve_dict_drn = {key: curve_dict_drn[key] for key in groundtruth_ids}
 
     # # Open the file in read-binary mode and load the dictionary
-    with open('data/new_groundtruth_df_curve_dict_fn_v1.pkl', 'wb') as file:
+    with open('data/new_groundtruth_df_curve_dict_fn_no_invalid.pkl', 'wb') as file:
         pickle.dump(groundtruth_curve_dict_fn, file)
 
-    with open('data/new_groundtruth_df_curve_dict_drn_v1.pkl', 'wb') as file:
+    with open('data/new_groundtruth_df_curve_dict_drn_no_invalid.pkl', 'wb') as file:
         pickle.dump(groundtruth_curve_dict_drn, file)
     
-    with open('data/new_full_curve_dict_fn_v1.pkl', 'wb') as file:
+    with open('data/new_full_curve_dict_fn_no_invalid.pkl', 'wb') as file:
         pickle.dump(curve_dict_fn, file)
     
-    with open('data/new_full_curve_dict_drn_v1.pkl', 'wb') as file:
+    with open('data/new_full_curve_dict_drn_no_invalid.pkl', 'wb') as file:
         pickle.dump(curve_dict_drn, file)

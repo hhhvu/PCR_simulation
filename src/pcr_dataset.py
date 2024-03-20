@@ -218,7 +218,7 @@ class ImageDataModule(pl.LightningDataModule):
         return DataLoader(self.test, batch_size=self.batch_size, shuffle=False, num_workers = self.num_workers)
 
 class ImageDataset(Dataset):
-    def __init__(self, curve_dict, target_df, img_directory = 'data/curve_imgs_new/', sequence_len=40, igi_call=True,
+    def __init__(self, curve_dict, target_df, img_directory = 'data/curve_imgs_new_cleaner_no_invalid/', sequence_len=40, igi_call=True,
                  mean=0, std=1):
         
         self.curve_dict = curve_dict
@@ -266,7 +266,7 @@ class ImageDataset(Dataset):
             igi_fn = torch.tensor(row['igi_fn'].values[0], dtype=torch.float)
             target = torch.stack([target, igi_fp, igi_fn], dim=0)
 
-        return curve_img, target #, curve_idx
+        return [curve_img], target #, curve_idx
 
 class ImageSequenceGeneDataModule(pl.LightningDataModule):
     """
@@ -627,10 +627,6 @@ class SequenceGeneDataset(Dataset):
         #gene info processing
         row = self.target_df.loc[self.target_df['curve_idx'] == curve_idx]
         gene_type = torch.tensor(row[self.one_hot.columns].values, dtype=torch.float32)
-
-        # print(gene_type)
-        gene_type = torch.nn.functional.pad(gene_type, (0, 5))
-        # print(gene_type)
 
         target = torch.tensor(row['groundtruth_target'].values[0], dtype=torch.float)
 
