@@ -50,6 +50,9 @@ NAME_TO_DATASET_CLASS = {
 # Saathvik Eval command
 # CUDA_VISIBLE_DEVICES=6 python x03a_generate_test_preds_pl.py --model_name seq --dataset_name seq_data --igi_call true --checkpoint_path pcr-classification_Seq_large/4zj4iny9/checkpoints/epoch=45-step=278254.ckpt
 
+# CUDA_VISIBLE_DEVICES=7 python x03a_generate_test_preds_pl.py --model_name seq --dataset_name seq_data --igi_call true
+# CUDA_VISIBLE_DEVICES=7 python x03a_generate_test_preds_pl.py --model_name seq_gene --dataset_name seqgene --igi_call true
+
 def add_main_args(parser: LightningArgumentParser) -> LightningArgumentParser:
 
     parser.add_argument(

@@ -475,6 +475,23 @@ class SequenceDataset(Dataset):
         self.igi_call = igi_call
         self.gen_preds = gen_preds
 
+        if np.isnan(self.mean):
+            # self.mean, self.std = 155626.8370536778, 94477.0057018847
+            mean_list = []
+            std_list = []
+
+            for key, curve in tqdm(self.curve_dict.items()):
+                mean_curve = np.array(curve).mean().item()
+                std_curve = np.array(curve).std().item()
+
+                mean_list.append(mean_curve)
+                std_list.append(std_curve)
+
+            self.mean = np.array(mean_list).mean().item()
+            self.std = np.array(std_list).mean().item()
+
+            print(self.mean, self.std)
+
         # Image transformations: Resize and Normalize
         self.img_transforms = transforms.Compose([
             transforms.Lambda(lambda image: image.convert('RGB')),
@@ -511,9 +528,9 @@ class SequenceDataset(Dataset):
             target = torch.stack([target, igi_fp, igi_fn], dim=0)
 
         if self.gen_preds:
-            return (sequence_normalized.unsqueeze(1)), target, curve_idx
+            return [sequence_normalized.unsqueeze(1)], target, curve_idx
         else:
-            return (sequence_normalized.unsqueeze(1)), target
+            return [sequence_normalized.unsqueeze(1)], target
 
 
 class SequenceGeneDataModule(pl.LightningDataModule):
@@ -617,6 +634,23 @@ class SequenceGeneDataset(Dataset):
         self.mean = mean
         self.std = std
         self.igi_call = igi_call
+
+        if np.isnan(self.mean):
+            # self.mean, self.std = 155626.8370536778, 94477.0057018847
+            mean_list = []
+            std_list = []
+
+            for key, curve in tqdm(self.curve_dict.items()):
+                mean_curve = np.array(curve).mean().item()
+                std_curve = np.array(curve).std().item()
+
+                mean_list.append(mean_curve)
+                std_list.append(std_curve)
+
+            self.mean = np.array(mean_list).mean().item()
+            self.std = np.array(std_list).mean().item()
+
+            print(self.mean, self.std)
    
     def __len__(self):
         return len(self.curve_dict.keys())
@@ -633,6 +667,10 @@ class SequenceGeneDataset(Dataset):
         #gene info processing
         row = self.target_df.loc[self.target_df['curve_idx'] == curve_idx]
         gene_type = torch.tensor(row[self.one_hot.columns].values, dtype=torch.float32)
+
+        # print(gene_type)
+        gene_type = torch.nn.functional.pad(gene_type, (0, 5))
+        # print(gene_type)
 
         target = torch.tensor(row['groundtruth_target'].values[0], dtype=torch.float)
 
