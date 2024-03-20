@@ -150,13 +150,40 @@ def main(args: argparse.Namespace):
     dataset_args['batch_size'] = int(args.batch_size)
     # dataset_args['curve_dict_path'] = 'data/groundtruth_df_curve_dict_split_v2.pkl'
     # dataset_args['target_df_path'] = 'data/groundtruth_df_target_data_split_v2.csv'
-    dataset_args['curve_dict_path'] =  'data/new_groundtruth_df_curve_dict_fn_v1.pkl'
-    dataset_args['target_df_path'] = 'data/new_groundtruth_df_target_data_v1.csv'
+
+    # dataset_args['curve_dict_path'] =  'data/new_groundtruth_df_curve_dict_fn_v1.pkl'
+    # dataset_args['target_df_path'] = 'data/new_groundtruth_df_target_data_v1.csv'
+    # dataset_args['img_directory'] = 'data/curve_imgs_new/'
+    # dataset_args['external'] = False
+
+    # dataset_args['curve_dict_path'] =  'data/chip60_curve_dict.pkl'
+    # dataset_args['target_df_path'] = 'data/chip60_target_data.csv'
+    # dataset_args['img_directory'] = 'data/curve_imgs_chip60/'
+    # dataset_args['external'] = True
+
+    # dataset_args['curve_dict_path'] =  'data/karlen_curve_dict.pkl'
+    # dataset_args['target_df_path'] = 'data/karlen_target_data.csv'
+    # dataset_args['img_directory'] = 'data/curve_imgs_karlen/'
+    # dataset_args['external'] = True
+
+    # dataset_args['curve_dict_path'] =  'data/known_curve_dict.pkl'
+    # dataset_args['target_df_path'] = 'data/known_target_data.csv'
+    # dataset_args['img_directory'] = 'data/curve_imgs_known/'
+    # dataset_args['external'] = True
+
+    dataset_args['curve_dict_path'] =  'data/new_retest_curve_dict_1.pkl'
+    dataset_args['target_df_path'] = 'data/new_retest_df_target_data_1.csv'
+    dataset_args['img_directory'] = 'data/curve_imgs_retest/'
+    dataset_args['external'] = True
+    
     dataset_args['igi_call'] = (args.igi_call == 'true')
     dataset_args['gen_preds'] = True
 
     datamodule = NAME_TO_DATASET_CLASS[args.dataset_name](**dataset_args)
     # datamodule = NAME_TO_DATASET_CLASS[args.dataset_name](**vars(args[args.dataset_name]))
+
+    datamodule.norm_mean = 152994.91899060126
+    datamodule.norm_std = 104175.45262448292
 
     print("Initializing model")
     print(args.checkpoint_path)
@@ -182,11 +209,14 @@ def main(args: argparse.Namespace):
     for batch in tqdm(testloader):
 
         inputs, labels, ids = batch
-        inputs = [x.to(device) for x in inputs]
-        #inputs = inputs.to(device)
+        #inputs = [x.to(device) for x in inputs]
+        inputs = inputs.to(device)
+        #print(inputs)
+        #print(inputs.shape)
+        #print(inputs)
 
-        out = model(*inputs)
-        #out = model(inputs)
+        #out = model(*inputs)
+        out = model(inputs)
         #print(out)
         #print(out.shape)
         # print(len(ids))
@@ -202,45 +232,52 @@ def main(args: argparse.Namespace):
                              'igi_fn': np.concatenate(igi_fn).squeeze()})
 
     test_pred_df['split'] = 'test'
-        
-    valloader = datamodule.val_dataloader()
-
-    probs, igi_fp, igi_fn = [], [], []
-    curve_ids = []
-    model.eval()
-
-    for batch in tqdm(valloader):
-        inputs, labels, ids = batch
-
-        inputs = [x.to(device) for x in inputs]
-        #inputs = inputs.to(device)
-
-        out = model(*inputs)
-        #out = model(inputs)
-        if out.dim() == 1:
-            # Unsqueeze 'out' to have a shape of [1, 3]
-            out = out.unsqueeze(0)
-
-
-        # print(out)
-        # print(out.shape)
-        # print(len(ids))
-        probs.append(out[:,0].detach().cpu().numpy())
-        igi_fp.append(out[:,1].detach().cpu().numpy())
-        igi_fn.append(out[:,2].detach().cpu().numpy())
-
-        curve_ids.append(ids)
     
-    if curve_ids:
-        val_pred_df = pd.DataFrame({'curve_idx': np.concatenate(curve_ids), 
-                                'outputs': np.concatenate(probs).squeeze(),
-                                'igi_fp': np.concatenate(igi_fp).squeeze(),
-                                'igi_fn': np.concatenate(igi_fn).squeeze()})
-        val_pred_df['split'] = 'val'
+    print(datamodule.norm_mean)
+    print(datamodule.norm_std)
 
-        test_pred_df = pd.concat([val_pred_df, test_pred_df], ignore_index=True)
 
-    test_pred_df.to_csv('data/model_outputs/3_18_Seq_Gene_Model_large_val_test_pred_df.csv', index = False)
+    # Below the norm_mean and norm_std for the model training set
+    # 152994.91899060126
+    # 104175.45262448292
+
+    # valloader = datamodule.val_dataloader()
+
+    # probs, igi_fp, igi_fn = [], [], []
+    # curve_ids = []
+    # model.eval()
+
+    # for batch in tqdm(valloader):
+    #     inputs, labels, ids = batch
+
+    #     #inputs = [x.to(device) for x in inputs]
+    #     inputs = inputs.to(device)
+
+    #     #out = model(*inputs)
+    #     out = model(inputs)
+    #     if out.dim() == 1:
+    #         # Unsqueeze 'out' to have a shape of [1, 3]
+    #         out = out.unsqueeze(0)
+
+
+    #     # print(out)
+    #     # print(out.shape)
+    #     # print(len(ids))
+    #     probs.append(out[:,0].detach().cpu().numpy())
+    #     igi_fp.append(out[:,1].detach().cpu().numpy())
+    #     igi_fn.append(out[:,2].detach().cpu().numpy())
+
+    #     curve_ids.append(ids)
+    
+    # val_pred_df = pd.DataFrame({'curve_idx': np.concatenate(curve_ids), 
+    #                          'outputs': np.concatenate(probs).squeeze(),
+    #                          'igi_fp': np.concatenate(igi_fp).squeeze(),
+    #                          'igi_fn': np.concatenate(igi_fn).squeeze()})
+    # val_pred_df['split'] = 'val'
+
+    # test_pred_df = pd.concat([val_pred_df, test_pred_df], ignore_index=True)
+
+    test_pred_df.to_csv('data/model_outputs/3_19_Image_Model_large_test_pred_df_retest.csv', index = False)
 
     """
     print("Initializing trainer")
