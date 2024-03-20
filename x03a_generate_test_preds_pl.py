@@ -45,6 +45,9 @@ NAME_TO_DATASET_CLASS = {
 # Saathvik Eval command
 # CUDA_VISIBLE_DEVICES=6 python x03a_generate_test_preds_pl.py --model_name seq --dataset_name seq_data --igi_call true --checkpoint_path pcr-classification_Seq_large/4zj4iny9/checkpoints/epoch=45-step=278254.ckpt
 
+# CUDA_VISIBLE_DEVICES=7 python x03a_generate_test_preds_pl.py --model_name seq --dataset_name seq_data --igi_call true
+# CUDA_VISIBLE_DEVICES=7 python x03a_generate_test_preds_pl.py --model_name seq_gene --dataset_name seqgene --igi_call true
+
 def add_main_args(parser: LightningArgumentParser) -> LightningArgumentParser:
 
     parser.add_argument(
@@ -142,8 +145,8 @@ def main(args: argparse.Namespace):
     dataset_args['batch_size'] = int(args.batch_size)
     # dataset_args['curve_dict_path'] = 'data/groundtruth_df_curve_dict_split_v2.pkl'
     # dataset_args['target_df_path'] = 'data/groundtruth_df_target_data_split_v2.csv'
-    dataset_args['curve_dict_path'] =  'data/new_groundtruth_df_curve_dict_fn.pkl'
-    dataset_args['target_df_path'] = 'data/new_groundtruth_df_target_data.csv'
+    dataset_args['curve_dict_path'] =  'data/karlen_curve_dict.pkl'
+    dataset_args['target_df_path'] = 'data/karlen_target_data.csv'
     dataset_args['igi_call'] = (args.igi_call == 'true')
     dataset_args['gen_preds'] = True
 
@@ -176,9 +179,7 @@ def main(args: argparse.Namespace):
         inputs = [x.to(device) for x in inputs]
 
         out = model(*inputs)
-        # print(out)
-        # print(out.shape)
-        # print(len(ids))
+        
         probs.append(out[:,0].detach().cpu().numpy())
         igi_fp.append(out[:,1].detach().cpu().numpy())
         igi_fn.append(out[:,2].detach().cpu().numpy())
@@ -204,24 +205,25 @@ def main(args: argparse.Namespace):
         inputs = [x.to(device) for x in inputs]
 
         out = model(*inputs)
-        # print(out)
-        # print(out.shape)
-        # print(len(ids))
+
         probs.append(out[:,0].detach().cpu().numpy())
         igi_fp.append(out[:,1].detach().cpu().numpy())
         igi_fn.append(out[:,2].detach().cpu().numpy())
 
         curve_ids.append(ids)
     
-    val_pred_df = pd.DataFrame({'curve_idx': np.concatenate(curve_ids), 
-                             'outputs': np.concatenate(probs).squeeze(),
-                             'igi_fp': np.concatenate(igi_fp).squeeze(),
-                             'igi_fn': np.concatenate(igi_fn).squeeze()})
-    val_pred_df['split'] = 'val'
+    if curve_ids:
+        val_pred_df = pd.DataFrame({'curve_idx': np.concatenate(curve_ids), 
+                                'outputs': np.concatenate(probs).squeeze(),
+                                'igi_fp': np.concatenate(igi_fp).squeeze(),
+                                'igi_fn': np.concatenate(igi_fn).squeeze()})
+        val_pred_df['split'] = 'val'
 
-    test_pred_df = pd.concat([val_pred_df, test_pred_df], ignore_index=True)
+        test_pred_df = pd.concat([val_pred_df, test_pred_df], ignore_index=True)
 
-    test_pred_df.to_csv('data/model_outputs/3_13_SeqGene_Model2_ep70_large_val_test_pred_df.csv', index = False)
+    print(test_pred_df.shape)
+    # test_pred_df.to_csv('data/model_outputs/3_13_Seq_Model_karlen_val_test_pred_df.csv', index = False)
+    test_pred_df.to_csv('data/model_outputs/3_13_SeqGene_Model2_ep70_karlen_val_test_pred_df.csv', index = False)
 
     """
     print("Initializing trainer")

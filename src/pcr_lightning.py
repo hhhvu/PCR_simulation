@@ -607,7 +607,9 @@ class SeqGeneModel(Classifier):
 
         # Fusion
         # fusion = seq_latent
-        fusion = torch.cat((seq_latent, genes.squeeze(1)), dim=1)
+        if genes.dim() == 3:
+            genes = genes.squeeze(1)
+        fusion = torch.cat((seq_latent, genes), dim=1)
         # fusion = torch.cat((img_latent, seq_latent, genes.squeeze(1), seq_latent_delta), dim=1)
         output = self.fc(fusion)
 
