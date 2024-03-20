@@ -3,7 +3,7 @@
     "pcr-classification_image"
   ],
   "main.batch_size": [
-    32
+    128
   ],
   "trainer.max_epochs": [
     50
@@ -26,7 +26,8 @@
   ],
   "curve.latent_dim": [
     512,
-    1024
+    1024,
+    2048
   ],
   "curve.pretrained":[
     true,

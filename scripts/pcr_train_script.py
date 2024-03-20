@@ -60,6 +60,10 @@ NAME_TO_DATASET_CLASS = {
 # python -m pdb -c continue scripts/pcr_train_script.py --project_name pcr-classification_image --experiment_name ImgModel_Save_3_head --trainer.max_epochs 100 --model_name curve --dataset_name img --igi_call true --curve.latent_dim 1024 --curve.init_lr 1e-5 --checkpoint_path pcr-classification_image/d73jmc6v/checkpoints/epoch=11-step=660.ckpt 
 # python -m pdb -c continue scripts/pcr_train_script.py --train --project_name pcr-classification_image --experiment_name ImgModel_Save_3_head --trainer.max_epochs 100 --model_name curve --dataset_name img --igi_call true --curve.latent_dim 1024 --curve.init_lr 1e-5
 
+# python scripts/pcr_train_script.py --train --project_name pcr-classification_seq_large --batch_size 128 --experiment_name SeqModel_large_cleaned_data_1e5lr --trainer.max_epochs 50 --model_name seq --dataset_name seq_data --igi_call true --seq.init_lr 1e-5 --seq.num_layers 5 --seq.num_heads 3 --seq.latent_dim 1024 --seq.hidden_size 512
+# python scripts/pcr_train_script.py --train --project_name pcr-classification_seq_gene_large --batch_size 128 --experiment_name SeqGeneModel_large_cleaned_data --trainer.max_epochs 50 --model_name seq_gene --dataset_name seqgene --igi_call true --seq_gene.init_lr 1e-4 --seq_gene.num_layers 5 --seq_gene.num_heads 3 --seq_gene.latent_dim 512 --seq_gene.hidden_size 512
+# python scripts/pcr_train_script.py --train --project_name pcr-classification_image --batch_size 128 --experiment_name ImageModel_large_cleaned_data --trainer.max_epochs 50 --model_name curve --dataset_name img --igi_call true --curve.init_lr 1e-5 --curve.num_layers 5 --curve.num_heads 3 --curve.latent_dim 512 --curve.hidden_size 512
+
 # Eval command
 # CUDA_VISIBLE_DEVICES=7 python scripts/pcr_train_script.py --project_name pcr-classification_fusion_test --experiment_name GeneFusionHeadsModel_Test --checkpoint_path pcr-classification_fusion_test/kibnmcmb/checkpoints/epoch=43-step=19184.ckpt --gene_fusion_heads.init_lr 1e-4 --gene_fusion_heads.hidden_size 512 --gene_fusion_heads.latent_dim 512 --gene_fusion_heads.num_layers 3 --gene_fusion_heads.delta 64 --model_name gene_fusion_heads --dataset_name imgseqgene --igi_call true
 
@@ -158,8 +162,8 @@ def main(args: argparse.Namespace):
     dataset_args = vars(args[args.dataset_name])
     # dataset_args['use_data_augmentation'] = bool(args.use_data_augmentation)
     dataset_args['batch_size'] = int(args.batch_size)
-    dataset_args['curve_dict_path'] =  'data/new_groundtruth_df_curve_dict_fn.pkl' #'data/groundtruth_df_curve_dict_split_v2.pkl' 
-    dataset_args['target_df_path'] = 'data/new_groundtruth_df_target_data.csv' #'data/groundtruth_df_target_data_split_v2.csv
+    dataset_args['curve_dict_path'] =  'data/new_groundtruth_df_curve_dict_fn_v1.pkl' #'data/groundtruth_df_curve_dict_split_v2.pkl' 
+    dataset_args['target_df_path'] = 'data/new_groundtruth_df_target_data_v1.csv' #'data/groundtruth_df_target_data_split_v2.csv
     dataset_args['igi_call'] = (args.igi_call == 'true')
 
     datamodule = NAME_TO_DATASET_CLASS[args.dataset_name](**dataset_args)
@@ -177,7 +181,7 @@ def main(args: argparse.Namespace):
     logger = pl.loggers.WandbLogger(project=args.project_name, 
                                     name = args.experiment_name,
                                     entity="saselvan",
-                                    log_model="all")
+                                    log_model=False)
 
     args.trainer.accelerator = 'auto'
     args.trainer.logger = logger
@@ -201,7 +205,7 @@ def main(args: argparse.Namespace):
         print("Training model")
         trainer.fit(model, datamodule)
 
-    #print("Best model checkpoint path: ", trainer.checkpoint_callback.best_model_path)
+    print("Best model checkpoint path: ", trainer.checkpoint_callback.best_model_path)
 
     print("Evaluating model on validation set")
     trainer.validate(model, datamodule)

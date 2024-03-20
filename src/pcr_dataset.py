@@ -218,7 +218,7 @@ class ImageDataModule(pl.LightningDataModule):
         return DataLoader(self.test, batch_size=self.batch_size, shuffle=False, num_workers = self.num_workers)
 
 class ImageDataset(Dataset):
-    def __init__(self, curve_dict, target_df, img_directory = 'data/curve_imgs/', sequence_len=40, igi_call=True,
+    def __init__(self, curve_dict, target_df, img_directory = 'data/curve_imgs_new/', sequence_len=40, igi_call=True,
                  mean=0, std=1):
         
         self.curve_dict = curve_dict
