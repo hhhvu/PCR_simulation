@@ -276,9 +276,9 @@ class ImageDataset(Dataset):
             target = torch.stack([target, igi_fp, igi_fn], dim=0)
 
         if self.gen_preds:
-            return curve_img, target, curve_idx
+            return [curve_img], target, curve_idx
         else:
-            return curve_img, target #, curve_idx
+            return [curve_img], target #, curve_idx
 
 class ImageSequenceGeneDataModule(pl.LightningDataModule):
     """
