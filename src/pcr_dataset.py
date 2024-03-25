@@ -10,18 +10,20 @@ import os
 import pickle as pkl
 import pandas as pd
 from PIL import Image
+from torch.utils.data import WeightedRandomSampler
 
 class ImageSequenceDataModule(pl.LightningDataModule):
     """
         Pytorch Lightning DataModule for Image+Sequence dataset. This will download the dataset, prepare data loaders and apply
         data augmentation.
     """
-    def __init__(self, curve_dict_path, target_df_path, batch_size=32, shuffle=True, num_workers =16, igi_call=False):
+    def __init__(self, curve_dict_path, target_df_path, img_directory, batch_size=32, shuffle=True, num_workers =16, igi_call=False):
         super().__init__()
         self.batch_size = batch_size
         self.shuffle = shuffle
         self.num_workers = num_workers
         self.igi_call = igi_call
+        self.img_directory = img_directory
 
         print("WE ARE USING THE IMAGE SEQUENCE DATASET")
 
@@ -70,11 +72,11 @@ class ImageSequenceDataModule(pl.LightningDataModule):
         return
 
     def setup(self, stage=None):
-        self.train = ImageSequenceDataset(self.curve_dict_train, self.target_df_train, igi_call=self.igi_call, mean=self.norm_mean, std=self.norm_std,
+        self.train = ImageSequenceDataset(self.curve_dict_train, self.target_df_train, self.img_directory, igi_call=self.igi_call, mean=self.norm_mean, std=self.norm_std,
                                           delta_mean=self.delta_mean, delta_std=self.delta_std)
-        self.val = ImageSequenceDataset(self.curve_dict_val, self.target_df_val, igi_call=self.igi_call, mean=self.norm_mean, std=self.norm_std,
+        self.val = ImageSequenceDataset(self.curve_dict_val, self.target_df_val, self.img_directory, igi_call=self.igi_call, mean=self.norm_mean, std=self.norm_std,
                                         delta_mean=self.delta_mean, delta_std=self.delta_std)
-        self.test = ImageSequenceDataset(self.curve_dict_test, self.target_df_test, igi_call=self.igi_call, mean=self.norm_mean, std=self.norm_std,
+        self.test = ImageSequenceDataset(self.curve_dict_test, self.target_df_test, self.img_directory, igi_call=self.igi_call, mean=self.norm_mean, std=self.norm_std,
                                          delta_mean=self.delta_mean, delta_std=self.delta_std)
 
     def train_dataloader(self):
@@ -161,11 +163,12 @@ class ImageDataModule(pl.LightningDataModule):
         Pytorch Lightning DataModule for Image+Sequence dataset. This will download the dataset, prepare data loaders and apply
         data augmentation.
     """
-    def __init__(self, curve_dict_path, target_df_path, batch_size=32, shuffle=True, num_workers=4, igi_call=False, gen_preds=False, img_directory = 'data/curve_imgs_new/', external=False):
+    def __init__(self, curve_dict_path, target_df_path, batch_size=32, shuffle=True, resampling=False, num_workers=4, igi_call=False, gen_preds=False, img_directory = 'data/curve_imgs_new/', external=False):
         super().__init__()
 
         self.batch_size = batch_size
         self.shuffle = shuffle
+        self.resampling = resampling
         self.num_workers = num_workers
         self.igi_call = igi_call
         self.gen_preds = gen_preds
@@ -217,7 +220,22 @@ class ImageDataModule(pl.LightningDataModule):
         self.test = ImageDataset(self.curve_dict_test, self.target_df_test, igi_call=self.igi_call, mean=self.norm_mean, std=self.norm_std, gen_preds=self.gen_preds, img_directory = self.img_directory)
 
     def train_dataloader(self):
-        return DataLoader(self.train, batch_size=self.batch_size, shuffle=True, num_workers = self.num_workers)
+        sampler = None
+        
+        if self.resampling:
+            shuffle = False
+            y = pd.Series(self.train.target_df['groundtruth_target'])
+            class_counts = y.value_counts()  # class counts
+
+            n_samples = len(y)
+
+            sample_weights = n_samples / np.array([class_counts[cl_idx]
+                                                for cl_idx in y])
+            sampler = WeightedRandomSampler(weights=sample_weights,
+                                            num_samples=len(sample_weights),
+                                            replacement=True)
+            
+        return DataLoader(self.train, batch_size=self.batch_size, shuffle=shuffle, sampler=sampler, num_workers = self.num_workers)
 
     def val_dataloader(self):
         return DataLoader(self.val, batch_size=self.batch_size, shuffle=False, num_workers = self.num_workers)
@@ -285,12 +303,15 @@ class ImageSequenceGeneDataModule(pl.LightningDataModule):
         Pytorch Lightning DataModule for Image+Sequence dataset. This will download the dataset, prepare data loaders and apply
         data augmentation.
     """
-    def __init__(self, curve_dict_path, target_df_path, batch_size=32, shuffle=True, num_workers=4, igi_call=False):
+    def __init__(self, curve_dict_path, target_df_path, img_directory, batch_size=32, shuffle=True, resampling=False, num_workers=4, igi_call=False):
         super().__init__()
         self.batch_size = batch_size
         self.shuffle = shuffle
+        self.resampling = resampling
         self.num_workers = num_workers
         self.igi_call = igi_call
+        
+        self.img_directory = img_directory
 
         print("WE ARE USING THE IMAGE SEQUENCE GENE DATASET")
 
@@ -324,8 +345,8 @@ class ImageSequenceGeneDataModule(pl.LightningDataModule):
         return
 
     def setup(self, stage=None):
-        self.train = ImageSequenceGeneDataset(self.curve_dict_train, self.target_df_train, igi_call=self.igi_call, mean=self.norm_mean, std=self.norm_std)
-        self.val = ImageSequenceGeneDataset(self.curve_dict_val, self.target_df_val, igi_call=self.igi_call, mean=self.norm_mean, std=self.norm_std)
+        self.train = ImageSequenceGeneDataset(self.curve_dict_train, self.target_df_train, self.img_directory,igi_call=self.igi_call, mean=self.norm_mean, std=self.norm_std)
+        self.val = ImageSequenceGeneDataset(self.curve_dict_val, self.target_df_val, self.img_directory, igi_call=self.igi_call, mean=self.norm_mean, std=self.norm_std)
 
     def train_dataloader(self):
         return DataLoader(self.train, batch_size=self.batch_size, shuffle=True, num_workers = self.num_workers)
@@ -394,10 +415,11 @@ class SequenceDataModule(pl.LightningDataModule):
         Pytorch Lightning DataModule for Image+Sequence dataset. This will download the dataset, prepare data loaders and apply
         data augmentation.
     """
-    def __init__(self, curve_dict_path, target_df_path, batch_size=32, shuffle=True, num_workers=4, igi_call=False, gen_preds=False, external=False):
+    def __init__(self, curve_dict_path, target_df_path, img_directory=None, batch_size=32, shuffle=True, resampling=False, num_workers=4, igi_call=False, gen_preds=False, external=False):
         super().__init__()
         self.batch_size = batch_size
         self.shuffle = shuffle
+        self.resampling = resampling
         self.num_workers = num_workers
         self.igi_call = igi_call
         self.gen_preds = gen_preds
@@ -449,7 +471,22 @@ class SequenceDataModule(pl.LightningDataModule):
         self.test = SequenceDataset(self.curve_dict_test, self.target_df_test, igi_call=self.igi_call, mean=self.norm_mean, std=self.norm_std, gen_preds=self.gen_preds)
 
     def train_dataloader(self):
-        return DataLoader(self.train, batch_size=self.batch_size, shuffle=True, num_workers = self.num_workers)
+        sampler = None
+        
+        if self.resampling:
+            shuffle = False
+            y = pd.Series(self.train.target_df['groundtruth_target'])
+            class_counts = y.value_counts()  # class counts
+
+            n_samples = len(y)
+
+            sample_weights = n_samples / np.array([class_counts[cl_idx]
+                                                for cl_idx in y])
+            sampler = WeightedRandomSampler(weights=sample_weights,
+                                            num_samples=len(sample_weights),
+                                            replacement=True)
+            
+        return DataLoader(self.train, batch_size=self.batch_size, shuffle=shuffle, sampler=sampler, num_workers = self.num_workers)
 
     def val_dataloader(self):
         return DataLoader(self.val, batch_size=self.batch_size, shuffle=False, num_workers = self.num_workers)
@@ -538,10 +575,11 @@ class SequenceGeneDataModule(pl.LightningDataModule):
         Pytorch Lightning DataModule for Gene+Sequence dataset. This will download the dataset, prepare data loaders and apply
         data augmentation.
     """
-    def __init__(self, curve_dict_path, target_df_path, batch_size=32, shuffle=True, num_workers=4, igi_call=False, gen_preds=False, external=False):
+    def __init__(self, curve_dict_path, target_df_path, img_directory=None, batch_size=32, shuffle=True, resampling=False, num_workers=4, igi_call=False, gen_preds=False, external=False):
         super().__init__()
         self.batch_size = batch_size
         self.shuffle = shuffle
+        self.resampling = resampling
         self.num_workers = num_workers
         self.igi_call = igi_call
         self.gen_preds = gen_preds
@@ -593,7 +631,22 @@ class SequenceGeneDataModule(pl.LightningDataModule):
         self.test = SequenceGeneDataset(self.curve_dict_test, self.target_df_test, igi_call=self.igi_call, mean=self.norm_mean, std=self.norm_std, gen_preds=self.gen_preds)
 
     def train_dataloader(self):
-        return DataLoader(self.train, batch_size=self.batch_size, shuffle=True, num_workers = self.num_workers)
+        sampler = None
+        
+        if self.resampling:
+            shuffle = False
+            y = pd.Series(self.train.target_df['groundtruth_target'])
+            class_counts = y.value_counts()  # class counts
+
+            n_samples = len(y)
+
+            sample_weights = n_samples / np.array([class_counts[cl_idx]
+                                                for cl_idx in y])
+            sampler = WeightedRandomSampler(weights=sample_weights,
+                                            num_samples=len(sample_weights),
+                                            replacement=True)
+            
+        return DataLoader(self.train, batch_size=self.batch_size, shuffle=shuffle, sampler=sampler, num_workers = self.num_workers)
 
     def val_dataloader(self):
         return DataLoader(self.val, batch_size=self.batch_size, shuffle=False, num_workers = self.num_workers)

@@ -136,6 +136,32 @@ def add_main_args(parser: LightningArgumentParser) -> LightningArgumentParser:
         help="Whether to include igi_call information (multiple heads of output)."
     )
 
+    parser.add_argument(
+        "--curve_dict_path",
+        help="File path to curve dict pickle file."
+    )
+    
+    parser.add_argument(
+        "--target_df_path",
+        help="File path to target data csv file."
+    )
+    
+    parser.add_argument(
+        "--img_directory",
+        help="Directory to imgs"
+    )
+    
+    parser.add_argument(
+        "--model_checkpoint_path",
+        help="Directory to folder where model checkpoints will be saved"
+    )
+    
+    parser.add_argument(
+        "--resampling",
+        default=False,
+        help="Whether data is resampled."
+    )
+    
     return parser
 
 def parse_args() -> argparse.Namespace:
@@ -167,9 +193,14 @@ def main(args: argparse.Namespace):
     dataset_args = vars(args[args.dataset_name])
     # dataset_args['use_data_augmentation'] = bool(args.use_data_augmentation)
     dataset_args['batch_size'] = int(args.batch_size)
-    dataset_args['curve_dict_path'] =  'data/new_groundtruth_df_curve_dict_fn_no_invalid.pkl' #'data/groundtruth_df_curve_dict_split_v2.pkl' 
-    dataset_args['target_df_path'] = 'data/new_groundtruth_df_target_data_no_invalid.csv' #'data/groundtruth_df_target_data_split_v2.csv
+    # dataset_args['curve_dict_path'] =  'data/new_groundtruth_df_curve_dict_fn_no_invalid.pkl' #'data/groundtruth_df_curve_dict_split_v2.pkl' 
+    dataset_args['curve_dict_path'] =  args.curve_dict_path
+    dataset_args['img_directory'] =  args.img_directory
+    
+    # dataset_args['target_df_path'] = 'data/new_groundtruth_df_target_data_no_invalid.csv' #'data/groundtruth_df_target_data_split_v2.csv
+    dataset_args['target_df_path'] = args.target_df_path
     dataset_args['igi_call'] = (args.igi_call == 'true')
+    dataset_args['resampling'] = args.resampling
 
     datamodule = NAME_TO_DATASET_CLASS[args.dataset_name](**dataset_args)
     # datamodule = NAME_TO_DATASET_CLASS[args.dataset_name](**vars(args[args.dataset_name]))
@@ -185,7 +216,7 @@ def main(args: argparse.Namespace):
     print("Initializing trainer")
     logger = pl.loggers.WandbLogger(project=args.project_name, 
                                     name = args.experiment_name,
-                                    entity="saselvan",
+                                    # entity="saselvan",
                                     log_model=False)
 
     args.trainer.accelerator = 'auto'
@@ -197,6 +228,7 @@ def main(args: argparse.Namespace):
     else:
         args.trainer.callbacks = [
                 pl.callbacks.ModelCheckpoint(
+                    dirpath = args.model_checkpoint_path,
                 monitor=args.monitor_key,
                 mode='min' if "loss" in args.monitor_key else "max",
                 save_last=True
