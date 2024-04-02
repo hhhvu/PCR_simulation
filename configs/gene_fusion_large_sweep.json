@@ -17,10 +17,17 @@
   "main.igi_call": [
     "true"
   ],
-  "imgseqgene.img_directory": [
+  "main.curve_dict_path": [
+    "data/new_groundtruth_df_curve_dict_fn_no_invalid.pkl"
+  ],
+  "main.target_df_path": [
+    "data/new_groundtruth_df_target_data_no_invalid.csv"
+  ],
+  "main.img_directory": [
     "data/curve_imgs_new_cleaner_no_invalid/"
   ],
   "gene_fusion_heads.init_lr": [
+    1e-3,
     1e-4
   ],
   "gene_fusion_heads.hidden_size": [
@@ -28,13 +35,10 @@
     512
   ],
   "gene_fusion_heads.latent_dim": [
-    256,
     512,
     1024
   ],
   "gene_fusion_heads.num_layers":[
-    3,
-    5,
-    10
+    3
   ]
 }
