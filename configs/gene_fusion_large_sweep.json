@@ -39,6 +39,8 @@
     1024
   ],
   "gene_fusion_heads.num_layers":[
-    3
+    3,
+    5,
+    10
   ]
 }
