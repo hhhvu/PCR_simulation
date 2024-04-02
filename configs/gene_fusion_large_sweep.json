@@ -24,7 +24,8 @@
     1e-4
   ],
   "gene_fusion_heads.hidden_size": [
-    256
+    256,
+    512
   ],
   "gene_fusion_heads.latent_dim": [
     256,
