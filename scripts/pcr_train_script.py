@@ -201,8 +201,14 @@ def main(args: argparse.Namespace):
                 mode='min' if "loss" in args.monitor_key else "max",
                 save_last=True
             )]
-
-
+        
+    '''
+    ModelCheckpoint(dirpath=None, filename=None, monitor=None, verbose=False, save_last=None, save_top_k=1, 
+                    save_weights_only=False, mode='min', auto_insert_metric_name=True, every_n_train_steps=None, 
+                    train_time_interval=None, every_n_epochs=None, save_on_train_epoch_end=None, enable_version_counter=True)
+    
+    '''
+    
     trainer = pl.Trainer(**vars(args.trainer))
     trainer.log_every_n_steps = 1
 

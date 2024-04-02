@@ -590,6 +590,7 @@ class SeqGeneModel(Classifier):
         self.fc = nn.Sequential(
             nn.Linear(neural_net_input, 512),  # Concatenated vectors are of size 1024 (512 from image + 512 from sequence)
             nn.ReLU(),
+            # nn.Dropout(0.5),
             nn.Linear(512, 256),
             nn.ReLU(),
             nn.Linear(256, 128),
