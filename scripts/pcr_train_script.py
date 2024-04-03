@@ -64,7 +64,14 @@ NAME_TO_DATASET_CLASS = {
 # python scripts/pcr_train_script.py --train --project_name pcr-classification_seq_gene_large --batch_size 128 --experiment_name SeqGeneModel_large_cleaned_data --trainer.max_epochs 50 --model_name seq_gene --dataset_name seqgene --igi_call true --seq_gene.init_lr 1e-4 --seq_gene.num_layers 5 --seq_gene.num_heads 3 --seq_gene.latent_dim 512 --seq_gene.hidden_size 512
 # python scripts/pcr_train_script.py --train --project_name pcr-classification_image --batch_size 128 --experiment_name ImageModel_large_cleaned_data --trainer.max_epochs 50 --model_name curve --dataset_name img --igi_call true --curve.init_lr 1e-5 --curve.num_layers 5 --curve.num_heads 3 --curve.latent_dim 512 --curve.hidden_size 512
 
+<<<<<<< HEAD
 # python scripts/pcr_train_script.py --train --project_name pcr-classification_seq_gene_image_large --batch_size 128 --experiment_name ImgSeqGeneModel_large_cleaned_data --trainer.max_epochs 50 --model_name gene_fusion_heads --dataset_name imgseqgene --igi_call true --gene_fusion_heads.init_lr 1e-5 --gene_fusion_heads.num_layers 5 --gene_fusion_heads.num_heads 3 --gene_fusion_heads.latent_dim 512 --gene_fusion_heads.hidden_size 512
+=======
+# CUDA_VISIBLE_DEVICES=5 python scripts/pcr_train_script.py --train --project_name pcr-classification_seq_large --batch_size 128 --experiment_name SeqModel_large_cleaned_data_no_invalid_1e5lr --trainer.max_epochs 50 --model_name seq --dataset_name seq_data --igi_call true --seq.init_lr 1e-5 --seq.num_layers 5 --seq.num_heads 3 --seq.latent_dim 1024 --seq.hidden_size 512 --seq_data.num_workers 8
+# CUDA_VISIBLE_DEVICES=5 python scripts/pcr_train_script.py --train --project_name pcr-classification_seq_gene_large --batch_size 128 --experiment_name SeqGeneModel_large_cleaned_data_no_invalid --trainer.max_epochs 50 --model_name seq_gene --dataset_name seqgene --igi_call true --seq_gene.init_lr 1e-4 --seq_gene.num_layers 5 --seq_gene.num_heads 3 --seq_gene.latent_dim 512 --seq_gene.hidden_size 512 --seqgene.num_workers 8
+# CUDA_VISIBLE_DEVICES=6,7 python scripts/pcr_train_script.py --train --project_name pcr-classification_image --batch_size 128 --experiment_name ImageModel_large_cleaned_data_no_invalid --trainer.max_epochs 50 --model_name curve --dataset_name img --igi_call true --curve.init_lr 1e-5 --curve.num_layers 5 --curve.num_heads 3 --curve.latent_dim 512 --curve.hidden_size 512 --img.num_workers 8
+
+>>>>>>> 5bb4f239181fd9efbbb5cfc82e1d0c1479b6ebc6
 
 # Eval command
 # CUDA_VISIBLE_DEVICES=7 python scripts/pcr_train_script.py --project_name pcr-classification_fusion_test --experiment_name GeneFusionHeadsModel_Test --checkpoint_path pcr-classification_fusion_test/kibnmcmb/checkpoints/epoch=43-step=19184.ckpt --gene_fusion_heads.init_lr 1e-4 --gene_fusion_heads.hidden_size 512 --gene_fusion_heads.latent_dim 512 --gene_fusion_heads.num_layers 3 --gene_fusion_heads.delta 64 --model_name gene_fusion_heads --dataset_name imgseqgene --igi_call true
@@ -133,6 +140,32 @@ def add_main_args(parser: LightningArgumentParser) -> LightningArgumentParser:
         help="Whether to include igi_call information (multiple heads of output)."
     )
 
+    parser.add_argument(
+        "--curve_dict_path",
+        help="File path to curve dict pickle file."
+    )
+    
+    parser.add_argument(
+        "--target_df_path",
+        help="File path to target data csv file."
+    )
+    
+    parser.add_argument(
+        "--img_directory",
+        help="Directory to imgs"
+    )
+    
+    parser.add_argument(
+        "--model_checkpoint_path",
+        help="Directory to folder where model checkpoints will be saved"
+    )
+    
+    parser.add_argument(
+        "--resampling",
+        default=False,
+        help="Whether data is resampled."
+    )
+    
     return parser
 
 def parse_args() -> argparse.Namespace:
@@ -164,9 +197,14 @@ def main(args: argparse.Namespace):
     dataset_args = vars(args[args.dataset_name])
     # dataset_args['use_data_augmentation'] = bool(args.use_data_augmentation)
     dataset_args['batch_size'] = int(args.batch_size)
-    dataset_args['curve_dict_path'] =  'data/new_groundtruth_df_curve_dict_fn_v1.pkl' #'data/groundtruth_df_curve_dict_split_v2.pkl' 
-    dataset_args['target_df_path'] = 'data/new_groundtruth_df_target_data_v1.csv' #'data/groundtruth_df_target_data_split_v2.csv
+    # dataset_args['curve_dict_path'] =  'data/new_groundtruth_df_curve_dict_fn_no_invalid.pkl' #'data/groundtruth_df_curve_dict_split_v2.pkl' 
+    dataset_args['curve_dict_path'] =  args.curve_dict_path
+    dataset_args['img_directory'] =  args.img_directory
+    
+    # dataset_args['target_df_path'] = 'data/new_groundtruth_df_target_data_no_invalid.csv' #'data/groundtruth_df_target_data_split_v2.csv
+    dataset_args['target_df_path'] = args.target_df_path
     dataset_args['igi_call'] = (args.igi_call == 'true')
+    dataset_args['resampling'] = args.resampling
 
     datamodule = NAME_TO_DATASET_CLASS[args.dataset_name](**dataset_args)
     # datamodule = NAME_TO_DATASET_CLASS[args.dataset_name](**vars(args[args.dataset_name]))
@@ -182,7 +220,7 @@ def main(args: argparse.Namespace):
     print("Initializing trainer")
     logger = pl.loggers.WandbLogger(project=args.project_name, 
                                     name = args.experiment_name,
-                                    entity="saselvan",
+                                    # entity="saselvan",
                                     log_model=False)
 
     args.trainer.accelerator = 'auto'
@@ -194,12 +232,19 @@ def main(args: argparse.Namespace):
     else:
         args.trainer.callbacks = [
                 pl.callbacks.ModelCheckpoint(
+                    dirpath = args.model_checkpoint_path,
                 monitor=args.monitor_key,
                 mode='min' if "loss" in args.monitor_key else "max",
                 save_last=True
             )]
-
-
+        
+    '''
+    ModelCheckpoint(dirpath=None, filename=None, monitor=None, verbose=False, save_last=None, save_top_k=1, 
+                    save_weights_only=False, mode='min', auto_insert_metric_name=True, every_n_train_steps=None, 
+                    train_time_interval=None, every_n_epochs=None, save_on_train_epoch_end=None, enable_version_counter=True)
+    
+    '''
+    
     trainer = pl.Trainer(**vars(args.trainer))
     trainer.log_every_n_steps = 1
 

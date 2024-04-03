@@ -1,9 +1,9 @@
 { 
   "main.project_name": [
-    "pcr-classification_seq_large"
+    "pcr-classification_seq_large_resample"
   ],
   "main.batch_size": [
-    32
+    2048
   ],
   "trainer.max_epochs": [
     50
@@ -19,10 +19,14 @@
   ],
   "seq.init_lr": [
     1e-3,
-    1e-4
+    1e-4,
+    1e-5
   ],
   "seq.num_layers": [
+    1,
+    2,
     3,
+    4,
     5,
     10,
     12
@@ -31,6 +35,14 @@
     3
   ],
   "seq.latent_dim": [
+    128,
+    256,
+    512,
+    1024
+  ],
+  "seq_gene.hidden_size": [
+    128,
+    256,
     512,
     1024
   ]

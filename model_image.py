@@ -27,7 +27,7 @@ from tqdm.contrib.concurrent import process_map  # For progress bar with multipr
 # Define a function for generating and saving a single image
 def save_curve_as_image(curve_idx):
     sequence = curve_dict[curve_idx][:40]
-    imgs_folder = 'data/curve_imgs_retest'
+    imgs_folder = 'data/curve_imgs_karlen'
     if not os.path.exists(imgs_folder):
         os.makedirs(imgs_folder, exist_ok=True)  # Ensure thread-safe directory creation
     plt.plot(sequence, linewidth=6)
@@ -131,11 +131,11 @@ if __name__ == "__main__":
     # with open('data/groundtruth_df_curve_dict_split_v2.pkl', 'rb') as file:
     #     curve_dict = pkl.load(file)
     
-    with open('data/new_retest_curve_dict_1.pkl', 'rb') as file: #new_full_curve_dict_fn_v1.pkl
+    with open('data/karlen_curve_dict.pkl', 'rb') as file: #new_full_curve_dict_fn_v1.pkl
         curve_dict = pkl.load(file)
 
     #target_df = pd.read_csv('data/groundtruth_df_target_data_split_v2.csv')
-    target_df = pd.read_csv('data/new_retest_df_target_data_1.csv') #new_groundtruth_df_target_data_v1.csv
+    target_df = pd.read_csv('data/karlen_target_data.csv') #new_groundtruth_df_target_data_v1.csv
     
     ###########################################
     ## Get the right normalization values

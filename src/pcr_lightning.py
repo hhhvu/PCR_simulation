@@ -31,7 +31,7 @@ class Classifier(pl.LightningModule):
 
         ## TODO: get predictions from your model and store them as y_hat
         y_hat = self.forward(*x)
-        #y_hat = self.forward(x)
+        # y_hat = self.forward(x)
         loss = sum(self.loss(y_hat[:,i],y[:,i]) for i in range(3))
 
         self.log('train_loss', loss, prog_bar=True, sync_dist=True)
@@ -47,7 +47,7 @@ class Classifier(pl.LightningModule):
         x, y = self.get_xy(batch)
 
         y_hat = self.forward(*x)
-        #y_hat = self.forward(x)
+        # y_hat = self.forward(x)
         loss = sum(self.loss(y_hat[:,i],y[:,i]) for i in range(3))
 
         self.log('val_loss', loss, prog_bar=True, sync_dist=True)
@@ -62,7 +62,7 @@ class Classifier(pl.LightningModule):
         x, y = self.get_xy(batch)
 
         y_hat = self.forward(*x)
-        #y_hat = self.forward(x)
+        # y_hat = self.forward(x)
 
         #loss = self.loss(y_hat,y)
         loss = sum(self.loss(y_hat[:,i],y[:,i]) for i in range(3))
@@ -353,6 +353,9 @@ class SeqModel(Classifier):
 
     def forward(self, sequence): #image, genes
         # Sequence processing
+        if isinstance(sequence, list):
+            sequence = sequence[0]
+        
         lstm_out, _ = self.lstm(sequence)
         seq_latent = self.lstm_fc(lstm_out[:, -1, :])  # Taking the last output from LSTM for the whole sequence
 
@@ -587,6 +590,7 @@ class SeqGeneModel(Classifier):
         self.fc = nn.Sequential(
             nn.Linear(neural_net_input, 512),  # Concatenated vectors are of size 1024 (512 from image + 512 from sequence)
             nn.ReLU(),
+            # nn.Dropout(0.5),
             nn.Linear(512, 256),
             nn.ReLU(),
             nn.Linear(256, 128),
