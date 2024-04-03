@@ -46,6 +46,7 @@ NAME_TO_DATASET_CLASS = {
 # python x03a_generate_test_preds_pl.py --model_name curve --dataset_name img --igi_call true --checkpoint_path  pcr-classification_image/jqz39dg2/checkpoints/epoch=8-step=1674.ckpt
 # python x03a_generate_test_preds_pl.py --model_name seq --dataset_name seq_data --igi_call true --checkpoint_path  pcr-classification_seq_large/lr1e5_run/checkpoints/epoch=40-step=7626.ckpt
 # python x03a_generate_test_preds_pl.py --model_name seq_gene --dataset_name seqgene --igi_call true --checkpoint_path  pcr-classification_seq_gene_large/7cr116dt/checkpoints/epoch=48-step=9114.ckpt
+# python x03a_generate_test_preds_pl.py --model_name gene_fusion_heads --dataset_name imgseqgene --igi_call true --checkpoint_path  pcr-classification_seq_gene_imge_large/3ifi9kmv/checkpoints/epoch=48-step=9114.ckpt
 
 # Saathvik Eval command
 # CUDA_VISIBLE_DEVICES=6 python x03a_generate_test_preds_pl.py --model_name seq --dataset_name seq_data --igi_call true --checkpoint_path pcr-classification_Seq_large/4zj4iny9/checkpoints/epoch=45-step=278254.ckpt
@@ -166,15 +167,15 @@ def main(args: argparse.Namespace):
     # dataset_args['img_directory'] = 'data/curve_imgs_karlen/'
     # dataset_args['external'] = True
 
-    # dataset_args['curve_dict_path'] =  'data/known_curve_dict.pkl'
-    # dataset_args['target_df_path'] = 'data/known_target_data.csv'
-    # dataset_args['img_directory'] = 'data/curve_imgs_known/'
-    # dataset_args['external'] = True
-
-    dataset_args['curve_dict_path'] =  'data/new_retest_curve_dict_1.pkl'
-    dataset_args['target_df_path'] = 'data/new_retest_df_target_data_1.csv'
-    dataset_args['img_directory'] = 'data/curve_imgs_retest/'
+    dataset_args['curve_dict_path'] =  'data/known_curve_dict.pkl'
+    dataset_args['target_df_path'] = 'data/known_target_data.csv'
+    dataset_args['img_directory'] = 'data/curve_imgs_known/'
     dataset_args['external'] = True
+
+    # dataset_args['curve_dict_path'] =  'data/new_retest_curve_dict_1.pkl'
+    # dataset_args['target_df_path'] = 'data/new_retest_df_target_data_1.csv'
+    # dataset_args['img_directory'] = 'data/curve_imgs_retest/'
+    # dataset_args['external'] = True
     
     dataset_args['igi_call'] = (args.igi_call == 'true')
     dataset_args['gen_preds'] = True
@@ -209,14 +210,14 @@ def main(args: argparse.Namespace):
     for batch in tqdm(testloader):
 
         inputs, labels, ids = batch
-        #inputs = [x.to(device) for x in inputs]
-        inputs = inputs.to(device)
+        inputs = [x.to(device) for x in inputs]
+        #inputs = inputs.to(device)
         #print(inputs)
         #print(inputs.shape)
         #print(inputs)
 
-        #out = model(*inputs)
-        out = model(inputs)
+        out = model(*inputs)
+        #out = model(inputs)
         #print(out)
         #print(out.shape)
         # print(len(ids))
@@ -250,11 +251,11 @@ def main(args: argparse.Namespace):
     # for batch in tqdm(valloader):
     #     inputs, labels, ids = batch
 
-    #     #inputs = [x.to(device) for x in inputs]
-    #     inputs = inputs.to(device)
+    #     inputs = [x.to(device) for x in inputs]
+    #     #inputs = inputs.to(device)
 
-    #     #out = model(*inputs)
-    #     out = model(inputs)
+    #     out = model(*inputs)
+    #     # out = model(inputs)
     #     if out.dim() == 1:
     #         # Unsqueeze 'out' to have a shape of [1, 3]
     #         out = out.unsqueeze(0)
@@ -277,7 +278,7 @@ def main(args: argparse.Namespace):
 
     # test_pred_df = pd.concat([val_pred_df, test_pred_df], ignore_index=True)
 
-    test_pred_df.to_csv('data/model_outputs/3_19_Image_Model_large_test_pred_df_retest.csv', index = False)
+    test_pred_df.to_csv('data/model_outputs/3_20_Seq_Gene_Image_Model_large_val_test_pred_df_known.csv', index = False)
 
     """
     print("Initializing trainer")

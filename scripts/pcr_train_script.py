@@ -64,6 +64,8 @@ NAME_TO_DATASET_CLASS = {
 # python scripts/pcr_train_script.py --train --project_name pcr-classification_seq_gene_large --batch_size 128 --experiment_name SeqGeneModel_large_cleaned_data --trainer.max_epochs 50 --model_name seq_gene --dataset_name seqgene --igi_call true --seq_gene.init_lr 1e-4 --seq_gene.num_layers 5 --seq_gene.num_heads 3 --seq_gene.latent_dim 512 --seq_gene.hidden_size 512
 # python scripts/pcr_train_script.py --train --project_name pcr-classification_image --batch_size 128 --experiment_name ImageModel_large_cleaned_data --trainer.max_epochs 50 --model_name curve --dataset_name img --igi_call true --curve.init_lr 1e-5 --curve.num_layers 5 --curve.num_heads 3 --curve.latent_dim 512 --curve.hidden_size 512
 
+# python scripts/pcr_train_script.py --train --project_name pcr-classification_seq_gene_image_large --batch_size 128 --experiment_name ImgSeqGeneModel_large_cleaned_data --trainer.max_epochs 50 --model_name gene_fusion_heads --dataset_name imgseqgene --igi_call true --gene_fusion_heads.init_lr 1e-5 --gene_fusion_heads.num_layers 5 --gene_fusion_heads.num_heads 3 --gene_fusion_heads.latent_dim 512 --gene_fusion_heads.hidden_size 512
+
 # Eval command
 # CUDA_VISIBLE_DEVICES=7 python scripts/pcr_train_script.py --project_name pcr-classification_fusion_test --experiment_name GeneFusionHeadsModel_Test --checkpoint_path pcr-classification_fusion_test/kibnmcmb/checkpoints/epoch=43-step=19184.ckpt --gene_fusion_heads.init_lr 1e-4 --gene_fusion_heads.hidden_size 512 --gene_fusion_heads.latent_dim 512 --gene_fusion_heads.num_layers 3 --gene_fusion_heads.delta 64 --model_name gene_fusion_heads --dataset_name imgseqgene --igi_call true
 

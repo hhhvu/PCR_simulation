@@ -30,8 +30,8 @@ class Classifier(pl.LightningModule):
         x, y = self.get_xy(batch)
 
         ## TODO: get predictions from your model and store them as y_hat
-        #y_hat = self.forward(*x)
-        y_hat = self.forward(x)
+        y_hat = self.forward(*x)
+        #y_hat = self.forward(x)
         loss = sum(self.loss(y_hat[:,i],y[:,i]) for i in range(3))
 
         self.log('train_loss', loss, prog_bar=True, sync_dist=True)
@@ -46,8 +46,8 @@ class Classifier(pl.LightningModule):
     def validation_step(self, batch, batch_idx):
         x, y = self.get_xy(batch)
 
-        #y_hat = self.forward(*x)
-        y_hat = self.forward(x)
+        y_hat = self.forward(*x)
+        #y_hat = self.forward(x)
         loss = sum(self.loss(y_hat[:,i],y[:,i]) for i in range(3))
 
         self.log('val_loss', loss, prog_bar=True, sync_dist=True)
@@ -61,8 +61,8 @@ class Classifier(pl.LightningModule):
     def test_step(self, batch, batch_idx):
         x, y = self.get_xy(batch)
 
-        #y_hat = self.forward(*x)
-        y_hat = self.forward(x)
+        y_hat = self.forward(*x)
+        #y_hat = self.forward(x)
 
         #loss = self.loss(y_hat,y)
         loss = sum(self.loss(y_hat[:,i],y[:,i]) for i in range(3))
@@ -847,12 +847,16 @@ class GeneFusionHeadsModel(Classifier):
         self.fc = nn.Sequential(
             nn.Linear(neural_net_input, 512),  # Concatenated vectors are of size 1024 (512 from image + 512 from sequence)
             nn.ReLU(),
+            nn.BatchNorm1d(512),
             nn.Linear(512, 256),
             nn.ReLU(),
+            nn.BatchNorm1d(256),
             nn.Linear(256, 128),
             nn.ReLU(),
+            nn.BatchNorm1d(128),
             nn.Linear(128, 64),
             nn.ReLU(),
+            nn.BatchNorm1d(64),
             # nn.Linear(64, 1),
             # nn.Sigmoid()
             )
