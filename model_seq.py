@@ -1,5 +1,5 @@
-from comet_ml import Experiment
-from comet_ml.integration.pytorch import log_model
+# from comet_ml import Experiment
+# from comet_ml.integration.pytorch import log_model
 
 import torch
 from torch.utils.data import Dataset, DataLoader
@@ -125,6 +125,7 @@ if __name__ == "__main__":
     ###########################################
     ## Get the right normalization values
     ###########################################
+    """
 
     target_df_filtered = target_df[target_df['split']=='train']
     curve_dict_filtered = {k: curve_dict[k] for k in curve_dict.keys() if k in target_df_filtered['curve_idx'].values}
@@ -141,10 +142,46 @@ if __name__ == "__main__":
 
     norm_mean = np.array(mean_list).mean().item()
     norm_std = np.array(std_list).mean().item()
+    """
 
     ###########################################
     ## Save curves as images
     ###########################################
+
+    
+    imgs_folder = 'data/curve_imgs'
+
+    # Check and create the imgs_folder if it doesn't exist
+    if not os.path.exists(imgs_folder):
+        os.makedirs(imgs_folder)
+
+    def regenerate_curve(curve_idx, sequence):
+        plt.plot(sequence, linewidth=6)
+        plt.axis('off')  # This turns off the axis labels and ticks
+        plt.savefig(f'{imgs_folder}/curve_{curve_idx}.png', bbox_inches='tight')
+        plt.clf()
+
+    # Iterate through each image file in the directory to check for broken images
+    for filename in tqdm(os.listdir(imgs_folder)):
+        if filename.endswith('.png'):
+            path = os.path.join(imgs_folder, filename)
+            try:
+                # Attempt to open the image
+                with Image.open(path) as img:
+                    img.verify()  # Verify the image is not broken
+            except (IOError, SyntaxError) as e:
+                print(f"Identified a broken image: {filename}. Regenerating...")
+                # Extract curve_idx from the filename
+                curve_idx = filename.split('_')[1].split('.')[0]
+                curve_idx = int(curve_idx)
+                # Check if the curve_idx is in your curve_dict
+                if curve_idx in list(curve_dict.keys()):
+                    sequence = curve_dict[curve_idx][:40]
+                    regenerate_curve(curve_idx, sequence)
+                else:
+                    print(f"Curve index {curve_idx} not found in curve_dict. Skipping...")
+
+    print("Process completed.")
 
     '''
     imgs_folder = 'data/curve_imgs'
@@ -166,6 +203,7 @@ if __name__ == "__main__":
     ###########################################
     ## Set-up data objects
     ###########################################
+    """
 
     # Create Dataset and DataLoader
     train_dataset = ImageSequenceDataset(curve_dict, target_df,img_directory = 'data/curve_imgs/', train=True, sequence_len=40,
@@ -283,4 +321,4 @@ if __name__ == "__main__":
 
         experiment.log_metrics({'Validation Accuracy': val_acc, 'Avg Training Loss': avg_train_loss, 'Avg Validation Loss': avg_val_loss, 'Validation AUC': val_auc}, epoch=epoch)
         print(f"Epoch {epoch}, Training Loss: {avg_train_loss}, Validation Loss: {avg_val_loss}, Validation Accuracy: {val_acc}, Validation AUC: {val_auc}")
-        
+    """

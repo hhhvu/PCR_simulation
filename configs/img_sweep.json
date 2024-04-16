@@ -1,0 +1,55 @@
+{ 
+  "main.project_name": [
+    "pcr-classification_image_large_resample"
+  ],
+  "main.batch_size": [
+    1024
+  ],
+  "trainer.max_epochs": [
+    50
+  ],
+  "main.model_name": [
+    "curve"
+  ],
+  "main.dataset_name": [
+    "img"
+  ],
+  "main.igi_call": [
+    "true"
+  ],
+  "curve.init_lr": [
+    1e-3,
+    1e-4,
+    1e-5
+  ],
+  "curve.num_heads": [
+    3
+  ],
+  "seq.num_layers": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    10,
+    12
+  ],
+  
+  "seq.latent_dim": [
+    256,
+    512,
+    1024,
+    2048
+  ],
+  "seq_gene.hidden_size": [
+    256,
+    512,
+    1024,
+    2048
+  ],
+  "curve.pretrained":[
+    true,
+    false
+  ]
+
+}

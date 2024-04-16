@@ -10,9 +10,18 @@ import multiprocessing
 
 #Run scripts
 # CUDA_VISIBLE_DEVICES=7 python scripts/pcr_dispatcher.py --config_path configs/gene_fusion_sweep.json --num_workers 1
+# CUDA_VISIBLE_DEVICES=7 python scripts/pcr_dispatcher.py --config_path configs/seq_sweep_v3.json --num_workers 4
+# CUDA_VISIBLE_DEVICES=4 python scripts/pcr_dispatcher.py --config_path configs/transformer_sweep_large.json --num_workers 6
 
 #python scripts/pcr_dispatcher.py --config_path configs/fusion_sweep.json --num_workers 4
 #python scripts/pcr_dispatcher.py --config_path configs/gene_fusion_sweep.json --num_workers 4
+#python scripts/pcr_dispatcher.py --config_path configs/gene_fusion_heads_sweep.json --num_workers 5
+#python scripts/pcr_dispatcher.py --config_path configs/img_sweep.json --num_workers 4
+#python scripts/pcr_dispatcher.py --config_path configs/img_range_sweep.json --num_workers 4
+#python scripts/pcr_dispatcher.py --config_path configs/seq_gene_sweep_large_v2.json --num_workers 4
+
+#python scripts/pcr_dispatcher.py --config_path configs/seq_sweep.json --num_workers 1
+#python scripts/pcr_dispatcher.py --config_path configs/seq_sweep_v2.json --num_workers 1
 
 def add_main_args(parser: argparse.ArgumentParser) -> argparse.ArgumentParser:
     parser.add_argument(

@@ -5,6 +5,7 @@ import torch.nn.functional as F
 import torchmetrics
 import torchvision
 from torchvision import models
+import math as math
 
 class Classifier(pl.LightningModule):
     def __init__(self, num_classes=2, init_lr=1e-4):
@@ -30,6 +31,7 @@ class Classifier(pl.LightningModule):
 
         ## TODO: get predictions from your model and store them as y_hat
         y_hat = self.forward(*x)
+        # y_hat = self.forward(x)
         loss = sum(self.loss(y_hat[:,i],y[:,i]) for i in range(3))
 
         self.log('train_loss', loss, prog_bar=True, sync_dist=True)
@@ -45,12 +47,30 @@ class Classifier(pl.LightningModule):
         x, y = self.get_xy(batch)
 
         y_hat = self.forward(*x)
-
+        # y_hat = self.forward(x)
         loss = sum(self.loss(y_hat[:,i],y[:,i]) for i in range(3))
 
         self.log('val_loss', loss, prog_bar=True, sync_dist=True)
 
         self.validation_outputs.append({
+            "y_hat": y_hat,
+            "y": y
+        })
+        return loss
+
+    def test_step(self, batch, batch_idx):
+        x, y = self.get_xy(batch)
+
+        y_hat = self.forward(*x)
+        # y_hat = self.forward(x)
+
+        #loss = self.loss(y_hat,y)
+        loss = sum(self.loss(y_hat[:,i],y[:,i]) for i in range(3))
+
+        self.log('test_loss', loss, sync_dist=True, prog_bar=True)
+        self.log('test_acc', self.accuracy(y_hat, y), sync_dist=True, prog_bar=True)
+
+        self.test_outputs.append({
             "y_hat": y_hat,
             "y": y
         })
@@ -70,7 +90,30 @@ class Classifier(pl.LightningModule):
         
         self.log("val_auc", self.auc(y_hat, y), sync_dist=True, prog_bar=True)
         self.log("val_acc", self.accuracy(y_hat, y), sync_dist=True, prog_bar=True)
-        self.validation_outputs = []
+        #self.validation_outputs = []
+        
+        # save to process later for evaluation
+        torch.save(y_hat, 'y_hat_val_image.pt')
+        torch.save(y, 'y_val_true.pt')
+    
+    def on_test_epoch_end(self):
+        y_hat = torch.cat([o["y_hat"] for o in self.test_outputs])
+        y = torch.cat([o["y"] for o in self.test_outputs])
+
+        if self.num_classes == 2:
+            probs = F.softmax(y_hat, dim=-1)[:,-1]
+        else:
+            probs = F.softmax(y_hat, dim=-1)
+
+        self.log("test_auc", self.auc(probs, y.view(-1)), sync_dist=True, prog_bar=True)
+
+        self.log("val_auc", self.auc(y_hat, y), sync_dist=True, prog_bar=True)
+        self.log("val_acc", self.accuracy(y_hat, y), sync_dist=True, prog_bar=True)
+        self.test_outputs = []
+
+        # save to process later for evaluation
+        torch.save(y_hat, 'y_hat_test_image.pt')
+        torch.save(y, 'y_test_true.pt')
 
     def configure_optimizers(self):
         ## TODO: Define your optimizer and learning rate scheduler here (hint: Adam is a good default)
@@ -80,6 +123,74 @@ class Classifier(pl.LightningModule):
 
         # return {'optimizer': optimizer, 'lr_scheduler': {'scheduler': scheduler, 'monitor':'val_loss'}}
         return optimizer
+
+
+##################################################
+## Transformer model
+    
+class PositionalEncoding(nn.Module):
+    def __init__(self, d_model, max_len=5000):
+        super(PositionalEncoding, self).__init__()
+        pe = torch.zeros(max_len, d_model)
+        position = torch.arange(0, max_len, dtype=torch.float).unsqueeze(1)
+        div_term = torch.exp(torch.arange(0, d_model, 2).float() * -(math.log(10000.0) / d_model))
+        pe[:, 0::2] = torch.sin(position * div_term)
+        pe[:, 1::2] = torch.cos(position * div_term)
+        pe = pe.unsqueeze(0).transpose(0, 1)
+        self.register_buffer('pe', pe)
+
+    def forward(self, x):
+        x = x + self.pe[:x.size(0), :]
+        return x
+
+class TransformerModel(Classifier):
+    def __init__(self, d_model=512, nhead=8, num_encoder_layers=3, dim_feedforward=512, dropout=0.2, max_seq_length=40, init_lr=1e-4, num_heads=3):
+        super().__init__(num_classes=2, init_lr=init_lr)
+        self.num_classes = 2
+        self.init_lr = init_lr
+        input_channels = 1
+        
+        self.pos_encoder = PositionalEncoding(d_model, max_seq_length)
+        encoder_layers = nn.TransformerEncoderLayer(d_model, nhead, dim_feedforward, dropout)
+        self.transformer_encoder = nn.TransformerEncoder(encoder_layers, num_encoder_layers)
+        self.input_proj = nn.Linear(input_channels, d_model)
+
+        self.fc = nn.Sequential(
+            nn.Linear(d_model, 256),
+            nn.ReLU(),
+            nn.Linear(256, 128),
+            nn.ReLU(),
+            nn.Linear(128, 64),
+            nn.ReLU(),
+            # nn.Linear(64, 1),
+            # nn.Sigmoid()
+            )
+
+        # Prediction heads
+        self.heads = nn.ModuleList([nn.Linear(64, 1) for _ in range(num_heads)])
+
+    def forward(self, x):
+        # Adjust x's shape to [batch_size, seq_len, input_channels] if not already
+        # It is [32, 40, 1] right now
+
+        x = self.input_proj(x)  # Now x is [batch_size, seq_len, d_model]
+        x = self.pos_encoder(x)
+        x = self.transformer_encoder(x)
+        x = x.mean(dim=1)  # Aggregate features across the sequence
+        output = self.fc(x)
+        # Get predictions for each head
+        outputs = torch.stack([torch.sigmoid(head(output)) for head in self.heads], dim=-1)
+
+        return outputs.squeeze()
+    
+    def on_validation_epoch_end(self):
+        y_hat = torch.cat([o["y_hat"] for o in self.validation_outputs])
+        y = torch.cat([o["y"] for o in self.validation_outputs])
+
+        self.log("val_auc", self.auc(y_hat[:,0], y[:,0]), sync_dist=True, prog_bar=True)
+        self.log("val_acc", self.accuracy(y_hat[:,0], y[:,0]), sync_dist=True, prog_bar=True)
+        self.validation_outputs = []
+
 
 class FusionModel(Classifier):
     """
@@ -206,6 +317,512 @@ class GeneFusionModel(Classifier):
 
         return output.squeeze()
 
+class SeqModel(Classifier):
+    def __init__(self, input_size=1, hidden_size=512, latent_dim=512, sequence_length=40, num_layers=5, genes=6, delta=64, num_heads=3, init_lr=1e-4):
+        super().__init__(num_classes=2, init_lr=init_lr)
+        self.save_hyperparameters()
+
+        self.latent_dim = latent_dim
+        self.delta = delta
+
+        # Sequence processing via LSTM
+        self.lstm = nn.LSTM(input_size, hidden_size, num_layers, batch_first=True)
+        self.hidden_state = (torch.zeros(num_layers, sequence_length, hidden_size), torch.zeros(num_layers, sequence_length, hidden_size))
+        # Final fully connected layer to ensure the LSTM output has a size of 512
+        self.lstm_fc = nn.Linear(hidden_size, self.latent_dim)
+
+        # Caluclate neural_net input size after appending genes and delta latent
+        neural_net_input = self.latent_dim
+
+        # Fusion of image and sequence representations
+        self.fc = nn.Sequential(
+            nn.Linear(neural_net_input, 512),  # Concatenated vectors are of size 1024 (512 from image + 512 from sequence)
+            nn.ReLU(),
+            nn.Linear(512, 256),
+            nn.ReLU(),
+            nn.Linear(256, 128),
+            nn.ReLU(),
+            nn.Linear(128, 64),
+            nn.ReLU(),
+            # nn.Linear(64, 1),
+            # nn.Sigmoid()
+            )
+
+        # Prediction heads
+        self.heads = nn.ModuleList([nn.Linear(64, 1) for _ in range(num_heads)])
+
+    def forward(self, sequence): #image, genes
+        # Sequence processing
+        if isinstance(sequence, list):
+            sequence = sequence[0]
+        
+        lstm_out, _ = self.lstm(sequence)
+        seq_latent = self.lstm_fc(lstm_out[:, -1, :])  # Taking the last output from LSTM for the whole sequence
+
+        # Fusion
+        fusion = seq_latent
+        # fusion = torch.cat((seq_latent), dim=1)
+        # fusion = torch.cat((img_latent, seq_latent, genes.squeeze(1), seq_latent_delta), dim=1)
+        output = self.fc(fusion)
+
+        # Get predictions for each head
+        outputs = torch.stack([torch.sigmoid(head(output)) for head in self.heads], dim=-1)
+
+        return outputs.squeeze()
+    
+    def on_validation_epoch_end(self):
+        y_hat = torch.cat([o["y_hat"] for o in self.validation_outputs])
+        y = torch.cat([o["y"] for o in self.validation_outputs])
+
+        self.log("val_auc", self.auc(y_hat[:,0], y[:,0]), sync_dist=True, prog_bar=True)
+        self.log("val_acc", self.accuracy(y_hat[:,0], y[:,0]), sync_dist=True, prog_bar=True)
+        self.validation_outputs = []
+
+class SeqDeltaModel(Classifier):
+    def __init__(self, input_size=1, hidden_size=512, latent_dim=512, sequence_length=40, num_layers=5, genes=6, delta=64, num_heads=3, init_lr=1e-4):
+        super().__init__(num_classes=2, init_lr=init_lr)
+        self.save_hyperparameters()
+
+        self.latent_dim = latent_dim
+        self.delta = delta
+
+        # Sequence processing via LSTM
+        self.lstm = nn.LSTM(input_size, hidden_size, num_layers, batch_first=True)
+        self.hidden_state = (torch.zeros(num_layers, sequence_length, hidden_size), torch.zeros(num_layers, sequence_length, hidden_size))
+        # Final fully connected layer to ensure the LSTM output has a size of 512
+        self.lstm_fc = nn.Linear(hidden_size, self.latent_dim)
+
+        # Caluclate neural_net input size after appending genes and delta latent
+        neural_net_input = self.latent_dim + self.delta
+
+        # Fusion of image and sequence representations
+        self.fc = nn.Sequential(
+            nn.Linear(neural_net_input, 512),  # Concatenated vectors are of size 1024 (512 from image + 512 from sequence)
+            nn.ReLU(),
+            nn.Linear(512, 256),
+            nn.ReLU(),
+            nn.Linear(256, 128),
+            nn.ReLU(),
+            nn.Linear(128, 64),
+            nn.ReLU(),
+            # nn.Linear(64, 1),
+            # nn.Sigmoid()
+            )
+
+        # Prediction heads
+        self.heads = nn.ModuleList([nn.Linear(64, 1) for _ in range(num_heads)])
+
+    def forward(self, image, sequence, genes):
+        # Sequence processing
+        lstm_out, _ = self.lstm(sequence)
+        seq_latent = self.lstm_fc(lstm_out[:, -1, :])  # Taking the last output from LSTM for the whole sequence
+
+        # Calculating delta
+        delta_latent = torch.max(sequence, dim=1)[0] - torch.min(sequence, dim=1)[0]
+        delta_latent = delta_latent.expand((-1, self.delta))
+
+        # Fusion
+        fusion = torch.cat((seq_latent, delta_latent), dim=1)
+
+        output = self.fc(fusion)
+
+        # Get predictions for each head
+        outputs = torch.stack([torch.sigmoid(head(output)) for head in self.heads], dim=-1)
+
+        return outputs.squeeze()
+    
+    def on_validation_epoch_end(self):
+        y_hat = torch.cat([o["y_hat"] for o in self.validation_outputs])
+        y = torch.cat([o["y"] for o in self.validation_outputs])
+
+        self.log("val_auc", self.auc(y_hat[:,0], y[:,0]), sync_dist=True, prog_bar=True)
+        self.log("val_acc", self.accuracy(y_hat[:,0], y[:,0]), sync_dist=True, prog_bar=True)
+        self.validation_outputs = []
+
+class SeqCurveModel(Classifier):
+    def __init__(self, input_size=1, hidden_size=512, latent_dim=512, sequence_length=40, num_layers=5, genes=6, delta=64, num_heads=3, init_lr=1e-4, pretrained=True):
+        super().__init__(num_classes=2, init_lr=init_lr)
+        self.save_hyperparameters()
+
+        self.latent_dim = latent_dim
+        self.delta = delta
+        self.pretrained = pretrained
+        
+        if self.pretrained:
+            self.vit = models.vit_b_32(weights='IMAGENET1K_V1')
+        else:
+            self.vit = models.vit_b_32(pretrained=False)
+
+        num_ftrs = self.vit.num_classes
+        self.vit_classifier = nn.Linear(num_ftrs, self.latent_dim)  
+
+        # Sequence processing via LSTM
+        self.lstm = nn.LSTM(input_size, hidden_size, num_layers, batch_first=True)
+        self.hidden_state = (torch.zeros(num_layers, sequence_length, hidden_size), torch.zeros(num_layers, sequence_length, hidden_size))
+        # Final fully connected layer to ensure the LSTM output has a size of 512
+        self.lstm_fc = nn.Linear(hidden_size, self.latent_dim)
+
+        # Caluclate neural_net input size after appending genes and delta latent
+        neural_net_input = self.latent_dim*2
+
+        # Fusion of image and sequence representations
+        self.fc = nn.Sequential(
+            nn.Linear(neural_net_input, 512),  # Concatenated vectors are of size 1024 (512 from image + 512 from sequence)
+            nn.ReLU(),
+            nn.Linear(512, 256),
+            nn.ReLU(),
+            nn.Linear(256, 128),
+            nn.ReLU(),
+            nn.Linear(128, 64),
+            nn.ReLU(),
+            # nn.Linear(64, 1),
+            # nn.Sigmoid()
+            )
+
+        # Prediction heads
+        self.heads = nn.ModuleList([nn.Linear(64, 1) for _ in range(num_heads)])
+
+    def forward(self, image, sequence, genes):
+        # Sequence processing
+        lstm_out, _ = self.lstm(sequence)
+        seq_latent = self.lstm_fc(lstm_out[:, -1, :])  # Taking the last output from LSTM for the whole sequence
+
+        # Image processing
+        img_latent = self.vit_classifier(self.vit(image))
+
+        # Fusion
+        fusion = torch.cat((img_latent, seq_latent), dim=1)
+
+        output = self.fc(fusion)
+
+        # Get predictions for each head
+        outputs = torch.stack([torch.sigmoid(head(output)) for head in self.heads], dim=-1)
+
+        return outputs.squeeze()
+    
+    def on_validation_epoch_end(self):
+        y_hat = torch.cat([o["y_hat"] for o in self.validation_outputs])
+        y = torch.cat([o["y"] for o in self.validation_outputs])
+
+        self.log("val_auc", self.auc(y_hat[:,0], y[:,0]), sync_dist=True, prog_bar=True)
+        self.log("val_acc", self.accuracy(y_hat[:,0], y[:,0]), sync_dist=True, prog_bar=True)
+        self.validation_outputs = []
+
+class SeqDeltaGeneModel(Classifier):
+    def __init__(self, input_size=1, hidden_size=512, latent_dim=512, sequence_length=40, num_layers=5, genes=6, delta=64, num_heads=3, init_lr=1e-4):
+        super().__init__(num_classes=2, init_lr=init_lr)
+        self.save_hyperparameters()
+
+        self.latent_dim = latent_dim
+        self.delta = delta
+
+        # Sequence processing via LSTM
+        self.lstm = nn.LSTM(input_size, hidden_size, num_layers, batch_first=True)
+        self.hidden_state = (torch.zeros(num_layers, sequence_length, hidden_size), torch.zeros(num_layers, sequence_length, hidden_size))
+        # Final fully connected layer to ensure the LSTM output has a size of 512
+        self.lstm_fc = nn.Linear(hidden_size, self.latent_dim)
+
+        # Caluclate neural_net input size after appending genes and delta latent
+        neural_net_input = self.latent_dim + self.delta + genes
+
+        # Fusion of image and sequence representations
+        self.fc = nn.Sequential(
+            nn.Linear(neural_net_input, 512),  # Concatenated vectors are of size 1024 (512 from image + 512 from sequence)
+            nn.ReLU(),
+            nn.Linear(512, 256),
+            nn.ReLU(),
+            nn.Linear(256, 128),
+            nn.ReLU(),
+            nn.Linear(128, 64),
+            nn.ReLU(),
+            # nn.Linear(64, 1),
+            # nn.Sigmoid()
+            )
+
+        # Prediction heads
+        self.heads = nn.ModuleList([nn.Linear(64, 1) for _ in range(num_heads)])
+
+    def forward(self, image, sequence, genes):
+        # Sequence processing
+        lstm_out, _ = self.lstm(sequence)
+        seq_latent = self.lstm_fc(lstm_out[:, -1, :])  # Taking the last output from LSTM for the whole sequence
+
+        # Calculating delta
+        delta_latent = torch.max(sequence, dim=1)[0] - torch.min(sequence, dim=1)[0]
+        delta_latent = delta_latent.expand((-1, self.delta))
+
+        # Fusion
+        fusion = torch.cat((seq_latent, genes.squeeze(1), delta_latent), dim=1)
+
+        output = self.fc(fusion)
+
+        # Get predictions for each head
+        outputs = torch.stack([torch.sigmoid(head(output)) for head in self.heads], dim=-1)
+
+        return outputs.squeeze()
+    
+    def on_validation_epoch_end(self):
+        y_hat = torch.cat([o["y_hat"] for o in self.validation_outputs])
+        y = torch.cat([o["y"] for o in self.validation_outputs])
+
+        self.log("val_auc", self.auc(y_hat[:,0], y[:,0]), sync_dist=True, prog_bar=True)
+        self.log("val_acc", self.accuracy(y_hat[:,0], y[:,0]), sync_dist=True, prog_bar=True)
+        self.validation_outputs = []
+
+class SeqGeneModel(Classifier):
+    def __init__(self, input_size=1, hidden_size=512, latent_dim=512, sequence_length=40, num_layers=5, genes=6, delta=64, num_heads=3, init_lr=1e-4):
+        super().__init__(num_classes=2, init_lr=init_lr)
+        self.save_hyperparameters()
+
+        self.latent_dim = latent_dim
+        self.delta = delta
+
+        # Sequence processing via LSTM
+        self.lstm = nn.LSTM(input_size, hidden_size, num_layers, batch_first=True)
+        self.hidden_state = (torch.zeros(num_layers, sequence_length, hidden_size), torch.zeros(num_layers, sequence_length, hidden_size))
+        # Final fully connected layer to ensure the LSTM output has a size of 512
+        self.lstm_fc = nn.Linear(hidden_size, self.latent_dim)
+
+        # Caluclate neural_net input size after appending genes and delta latent
+        neural_net_input = self.latent_dim + genes
+
+        # Fusion of image and sequence representations
+        self.fc = nn.Sequential(
+            nn.Linear(neural_net_input, 512),  # Concatenated vectors are of size 1024 (512 from image + 512 from sequence)
+            nn.ReLU(),
+            # nn.Dropout(0.5),
+            nn.Linear(512, 256),
+            nn.ReLU(),
+            nn.Linear(256, 128),
+            nn.ReLU(),
+            nn.Linear(128, 64),
+            nn.ReLU(),
+            # nn.Linear(64, 1),
+            # nn.Sigmoid()
+            )
+
+        # Prediction heads
+        self.heads = nn.ModuleList([nn.Linear(64, 1) for _ in range(num_heads)])
+
+    def forward(self, sequence, genes):
+        # Sequence processing
+        lstm_out, _ = self.lstm(sequence)
+        seq_latent = self.lstm_fc(lstm_out[:, -1, :])  # Taking the last output from LSTM for the whole sequence
+
+        # Fusion
+        # fusion = seq_latent
+        if genes.dim() == 3:
+            genes = genes.squeeze(1)
+        fusion = torch.cat((seq_latent, genes), dim=1)
+        # fusion = torch.cat((img_latent, seq_latent, genes.squeeze(1), seq_latent_delta), dim=1)
+        output = self.fc(fusion)
+
+        # Get predictions for each head
+        outputs = torch.stack([torch.sigmoid(head(output)) for head in self.heads], dim=-1)
+
+        return outputs.squeeze()
+    
+    def on_validation_epoch_end(self):
+        y_hat = torch.cat([o["y_hat"] for o in self.validation_outputs])
+        y = torch.cat([o["y"] for o in self.validation_outputs])
+
+        self.log("val_auc", self.auc(y_hat[:,0], y[:,0]), sync_dist=True, prog_bar=True)
+        self.log("val_acc", self.accuracy(y_hat[:,0], y[:,0]), sync_dist=True, prog_bar=True)
+        self.validation_outputs = []
+
+class SeqCurveGeneModel(Classifier):
+    def __init__(self, input_size=1, hidden_size=512, latent_dim=512, sequence_length=40, num_layers=5, genes=6, delta=64, num_heads=3, init_lr=1e-4, pretrained=True):
+        super().__init__(num_classes=2, init_lr=init_lr)
+        self.save_hyperparameters()
+
+        self.latent_dim = latent_dim
+        self.delta = delta
+        self.pretrained = pretrained
+        
+        if self.pretrained:
+            self.vit = models.vit_b_32(weights='IMAGENET1K_V1')
+        else:
+            self.vit = models.vit_b_32(pretrained=False)
+
+        num_ftrs = self.vit.num_classes
+        self.vit_classifier = nn.Linear(num_ftrs, self.latent_dim)  
+
+        # Sequence processing via LSTM
+        self.lstm = nn.LSTM(input_size, hidden_size, num_layers, batch_first=True)
+        self.hidden_state = (torch.zeros(num_layers, sequence_length, hidden_size), torch.zeros(num_layers, sequence_length, hidden_size))
+        # Final fully connected layer to ensure the LSTM output has a size of 512
+        self.lstm_fc = nn.Linear(hidden_size, self.latent_dim)
+
+        # Caluclate neural_net input size after appending genes and delta latent
+        neural_net_input = self.latent_dim*2 + genes
+
+        # Fusion of image and sequence representations
+        self.fc = nn.Sequential(
+            nn.Linear(neural_net_input, 512),  # Concatenated vectors are of size 1024 (512 from image + 512 from sequence)
+            nn.ReLU(),
+            nn.Linear(512, 256),
+            nn.ReLU(),
+            nn.Linear(256, 128),
+            nn.ReLU(),
+            nn.Linear(128, 64),
+            nn.ReLU(),
+            # nn.Linear(64, 1),
+            # nn.Sigmoid()
+            )
+
+        # Prediction heads
+        self.heads = nn.ModuleList([nn.Linear(64, 1) for _ in range(num_heads)])
+
+    def forward(self, image, sequence, genes):
+        # Sequence processing
+        lstm_out, _ = self.lstm(sequence)
+        seq_latent = self.lstm_fc(lstm_out[:, -1, :])  # Taking the last output from LSTM for the whole sequence
+
+        # Image processing
+        img_latent = self.vit_classifier(self.vit(image))
+
+        # Fusion
+        fusion = torch.cat((img_latent, seq_latent, genes.squeeze(1)), dim=1)
+
+        output = self.fc(fusion)
+
+        # Get predictions for each head
+        outputs = torch.stack([torch.sigmoid(head(output)) for head in self.heads], dim=-1)
+
+        return outputs.squeeze()
+    
+    def on_validation_epoch_end(self):
+        y_hat = torch.cat([o["y_hat"] for o in self.validation_outputs])
+        y = torch.cat([o["y"] for o in self.validation_outputs])
+
+        self.log("val_auc", self.auc(y_hat[:,0], y[:,0]), sync_dist=True, prog_bar=True)
+        self.log("val_acc", self.accuracy(y_hat[:,0], y[:,0]), sync_dist=True, prog_bar=True)
+        self.validation_outputs = []
+
+class CurveShapeModel(Classifier):
+    """
+        Model that solely finetunes the ViT model from the sequence.
+    """
+    def __init__(self, input_size=1, hidden_size=512, latent_dim=512, sequence_length=40, num_layers=5, genes=6, delta=64, num_heads=3, init_lr=1e-4, pretrained=True):
+        super().__init__(num_classes=2, init_lr=init_lr)
+        self.save_hyperparameters()
+
+        self.latent_dim = latent_dim
+        self.delta = delta
+        self.pretrained = pretrained
+        
+        if self.pretrained:
+            self.vit = models.vit_b_32(weights='IMAGENET1K_V1')
+        else:
+            self.vit = models.vit_b_32(pretrained=False)
+
+        num_ftrs = self.vit.num_classes
+        self.vit_classifier = nn.Linear(num_ftrs, self.latent_dim)  
+
+        # Fusion of image and sequence representations
+        self.fc = nn.Sequential(
+            nn.Linear(self.latent_dim, 512),  # Concatenated vectors are of size 1024 (512 from image + 512 from sequence)
+            nn.ReLU(),
+            nn.Linear(512, 256),
+            nn.ReLU(),
+            nn.Linear(256, 128),
+            nn.ReLU(),
+            nn.Linear(128, 64),
+            nn.ReLU(),
+            # nn.Linear(64, 1),
+            # nn.Sigmoid()
+            )
+
+        # Prediction heads
+        self.heads = nn.ModuleList([nn.Linear(64, 1) for _ in range(num_heads)])
+
+    def forward(self, image):
+        # Image processing
+        img_latent = self.vit_classifier(self.vit(image))
+        output = self.fc(img_latent)
+
+        # Get predictions for each head
+        outputs = torch.stack([torch.sigmoid(head(output)) for head in self.heads], dim=-1)
+
+        return outputs.squeeze()
+
+    def on_validation_epoch_end(self):
+        y_hat = torch.cat([o["y_hat"] for o in self.validation_outputs])
+        y = torch.cat([o["y"] for o in self.validation_outputs])
+
+        self.log("val_auc", self.auc(y_hat[:,0], y[:,0]), sync_dist=True, prog_bar=True)
+        self.log("val_acc", self.accuracy(y_hat[:,0], y[:,0]), sync_dist=True, prog_bar=True)
+        self.validation_outputs = []
+
+class CurveShapeDeltaModel(Classifier):
+    """
+        Model that solely finetunes the ViT model from the sequence.
+    """
+    def __init__(self, input_size=1, hidden_size=512, latent_dim=512, sequence_length=40, num_layers=5, genes=6, delta=64, num_heads=3, init_lr=1e-4, pretrained=True):
+        super().__init__(num_classes=2, init_lr=init_lr)
+        self.save_hyperparameters()
+
+        self.latent_dim = latent_dim
+        self.delta = delta
+        self.pretrained = pretrained
+        
+        if self.pretrained:
+            self.vit = models.vit_b_32(weights='IMAGENET1K_V1')
+        else:
+            self.vit = models.vit_b_32(pretrained=False)
+
+        num_ftrs = self.vit.num_classes
+        self.vit_classifier = nn.Linear(num_ftrs, self.latent_dim)  
+
+        neural_net_input = self.latent_dim + self.delta
+
+        # Fusion of image and sequence representations
+        self.fc = nn.Sequential(
+            nn.Linear(neural_net_input, 512),  # Concatenated vectors are of size 1024 (512 from image + 512 from sequence)
+            nn.Dropout(0.2),  # Add BatchNorm after Linear layer
+            nn.ReLU(),
+            nn.Linear(512, 256),
+            #nn.BatchNorm1d(256),  # Add BatchNorm after Linear layer
+            nn.ReLU(),
+            nn.Linear(256, 128),
+            #nn.BatchNorm1d(128),  # Add BatchNorm after Linear layer
+            nn.ReLU(),
+            nn.Linear(128, 64),
+            #nn.BatchNorm1d(64),  # Add BatchNorm after Linear layer
+            nn.ReLU(),
+            # nn.Linear(64, 1),
+            # nn.Sigmoid()
+            )
+
+        # Prediction heads
+        self.heads = nn.ModuleList([nn.Linear(64, 1) for _ in range(num_heads)])
+
+    def forward(self, image, delta_latent):
+        # Image processing
+        img_latent = self.vit_classifier(self.vit(image))
+
+        # Calculating delta
+        #delta_latent = torch.max(sequence, dim=1)[0] - torch.min(sequence, dim=1)[0]
+        #TODO add code to normalize the latent
+        delta_latent = delta_latent.unsqueeze(-1)
+        #print(delta_latent.shape)
+        delta_latent = delta_latent.expand((-1, self.delta))
+        # Fusion
+        fusion = torch.cat((img_latent, delta_latent), dim=1)
+        output = self.fc(fusion)
+
+        # Get predictions for each head
+        outputs = torch.stack([torch.sigmoid(head(output)) for head in self.heads], dim=-1)
+
+        return outputs.squeeze()
+
+    def on_validation_epoch_end(self):
+        y_hat = torch.cat([o["y_hat"] for o in self.validation_outputs])
+        y = torch.cat([o["y"] for o in self.validation_outputs])
+
+        self.log("val_auc", self.auc(y_hat[:,0], y[:,0]), sync_dist=True, prog_bar=True)
+        self.log("val_acc", self.accuracy(y_hat[:,0], y[:,0]), sync_dist=True, prog_bar=True)
+
 class GeneFusionHeadsModel(Classifier):
     """
         Model that takes in sequence, image, and gene data and outputs multiple prediction heads (for pred, igi_fp, igi_fn).
@@ -234,12 +851,16 @@ class GeneFusionHeadsModel(Classifier):
         self.fc = nn.Sequential(
             nn.Linear(neural_net_input, 512),  # Concatenated vectors are of size 1024 (512 from image + 512 from sequence)
             nn.ReLU(),
+            nn.BatchNorm1d(512),
             nn.Linear(512, 256),
             nn.ReLU(),
+            nn.BatchNorm1d(256),
             nn.Linear(256, 128),
             nn.ReLU(),
+            nn.BatchNorm1d(128),
             nn.Linear(128, 64),
             nn.ReLU(),
+            nn.BatchNorm1d(64),
             # nn.Linear(64, 1),
             # nn.Sigmoid()
             )
@@ -296,5 +917,4 @@ class GeneEnsembleModel(Classifier):
         x = torch.cat(x + [igi_call.view(-1, 1)], dim=1)
         x = torch.sigmoid(self.fc(x))
         return x.squeeze()
-    
     

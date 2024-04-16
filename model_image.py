@@ -21,6 +21,20 @@ from PIL import Image
 from torchvision import models 
 from torchvision.models import resnet18
 
+from concurrent.futures import ProcessPoolExecutor
+from tqdm.contrib.concurrent import process_map  # For progress bar with multiprocessing
+
+# Define a function for generating and saving a single image
+def save_curve_as_image(curve_idx):
+    sequence = curve_dict[curve_idx][:40]
+    imgs_folder = 'data/curve_imgs_karlen'
+    if not os.path.exists(imgs_folder):
+        os.makedirs(imgs_folder, exist_ok=True)  # Ensure thread-safe directory creation
+    plt.plot(sequence, linewidth=6)
+    plt.axis('off')  # This will turn off the axis labels and ticks
+    plt.savefig(f'{imgs_folder}/curve_{curve_idx}.png')
+    plt.close()
+
 
 class ImageSequenceDataset(Dataset):
     def __init__(self, curve_dict, target_df,img_directory = 'data/curve_imgs/', train=True, sequence_len=40, 
@@ -114,15 +128,21 @@ if __name__ == "__main__":
     ## Load the data
     ###########################################
 
-    with open('data/groundtruth_df_curve_dict_split_v2.pkl', 'rb') as file:
+    # with open('data/groundtruth_df_curve_dict_split_v2.pkl', 'rb') as file:
+    #     curve_dict = pkl.load(file)
+    
+    with open('data/karlen_curve_dict.pkl', 'rb') as file: #new_full_curve_dict_fn_v1.pkl
         curve_dict = pkl.load(file)
-    target_df = pd.read_csv('data/groundtruth_df_target_data_split_v2.csv')
 
+    #target_df = pd.read_csv('data/groundtruth_df_target_data_split_v2.csv')
+    target_df = pd.read_csv('data/karlen_target_data.csv') #new_groundtruth_df_target_data_v1.csv
+    
     ###########################################
     ## Get the right normalization values
     ###########################################
 
-    target_df_filtered = target_df[target_df['split']=='train']
+    #target_df_filtered = target_df[target_df['split']=='train']
+    target_df_filtered = target_df[target_df['split']=='test']
     curve_dict_filtered = {k: curve_dict[k] for k in curve_dict.keys() if k in target_df_filtered['curve_idx'].values}
 
     mean_list = []
@@ -142,141 +162,149 @@ if __name__ == "__main__":
     ## Save curves as images
     ###########################################
 
-    '''
-    imgs_folder = 'data/curve_imgs'
+    #imgs_folder = 'data/curve_imgs_new_cleaner'
 
-    for idx in tqdm(range(len(curve_dict.keys()))):
-        curve_idx = list(curve_dict.keys())[idx]
-        sequence = curve_dict[curve_idx][:40]
+    curve_indices = list(curve_dict.keys())
 
-        if not os.path.exists(imgs_folder):
-            os.makedirs(imgs_folder)
-        plt.plot(sequence, linewidth=6)
-        plt.axis('off')  # This will turn off the axis labels and ticks
-        # plt.axis('on') 
-        # plt.show()
-        plt.savefig(f'{imgs_folder}/curve_{curve_idx}.png')
-        plt.clf()
-    '''
+    # Using ProcessPoolExecutor to parallelize the loop
+    # Adjust `max_workers` as per your system's CPU resources if necessary
+    with ProcessPoolExecutor(max_workers=os.cpu_count()-10) as executor:
+        # Wrap with tqdm for a progress bar
+        list(process_map(save_curve_as_image, curve_indices, chunksize=10, max_workers=os.cpu_count()))
+
+
+    # for idx in tqdm(range(len(curve_dict.keys()))):
+    #     curve_idx = list(curve_dict.keys())[idx]
+    #     sequence = curve_dict[curve_idx][:40]
+
+    #     if not os.path.exists(imgs_folder):
+    #         os.makedirs(imgs_folder)
+    #     plt.plot(sequence, linewidth=6)
+    #     plt.axis('off')  # This will turn off the axis labels and ticks
+    #     # plt.axis('on') 
+    #     # plt.show()
+    #     plt.savefig(f'{imgs_folder}/curve_{curve_idx}.png')
+    #     plt.clf()
     
-    ###########################################
-    ## Set-up data objects
-    ###########################################
-
-    # Create Dataset and DataLoader
-    train_dataset = ImageSequenceDataset(curve_dict, target_df,img_directory = 'data/curve_imgs/', train=True, sequence_len=40,
-                                         mean=norm_mean, std = norm_std)
-    val_dataset = ImageSequenceDataset(curve_dict, target_df,img_directory = 'data/curve_imgs/', train=False, sequence_len=40,
-                                       mean=norm_mean, std = norm_std)
     
-    train_loader = DataLoader(train_dataset, batch_size=32, shuffle=True)
-    val_loader = DataLoader(val_dataset, batch_size=32, shuffle=True)
+    # ###########################################
+    # ## Set-up data objects
+    # ###########################################
+
+    # # Create Dataset and DataLoader
+    # train_dataset = ImageSequenceDataset(curve_dict, target_df,img_directory = 'data/curve_imgs/', train=True, sequence_len=40,
+    #                                      mean=norm_mean, std = norm_std)
+    # val_dataset = ImageSequenceDataset(curve_dict, target_df,img_directory = 'data/curve_imgs/', train=False, sequence_len=40,
+    #                                    mean=norm_mean, std = norm_std)
+    
+    # train_loader = DataLoader(train_dataset, batch_size=32, shuffle=True)
+    # val_loader = DataLoader(val_dataset, batch_size=32, shuffle=True)
 
 
-    ###########################################
-    ## Initialize model
-    ###########################################
+    # ###########################################
+    # ## Initialize model
+    # ###########################################
 
-    # Adjust the parameters as per your needs
-    sequence_length = 40  # Suppose the length of your sequence is 100
-    input_size = 1  # Number of input features per sequence element
-    hidden_size = 512
-    latent_dim = 512
-    num_layers = 3
-    num_epoch = 50
+    # # Adjust the parameters as per your needs
+    # sequence_length = 40  # Suppose the length of your sequence is 100
+    # input_size = 1  # Number of input features per sequence element
+    # hidden_size = 512
+    # latent_dim = 512
+    # num_layers = 3
+    # num_epoch = 50
 
-    model = ImageModel(input_size, hidden_size, latent_dim)
-    model.to(device)  # If you are using GPU
-
-
-    ###########################################
-    ## Set up metric logging
-    ###########################################
-
-    experiment = Experiment(
-        api_key="7smwpzl0FeZJcESqBITDniX7I",
-        project_name="classification-arch-search",
-        workspace="pcr-simulation"
-    )
-
-    experiment.set_name('ImageModel_MetricTest')
+    # model = ImageModel(input_size, hidden_size, latent_dim)
+    # model.to(device)  # If you are using GPU
 
 
-    ###########################################
-    ## Training Loop
-    ###########################################
+    # ###########################################
+    # ## Set up metric logging
+    # ###########################################
 
-    criterion = nn.BCELoss()  # Binary cross-entropy loss
-    optimizer = optim.Adam(model.parameters(), lr=0.0001)
+    # experiment = Experiment(
+    #     api_key="7smwpzl0FeZJcESqBITDniX7I",
+    #     project_name="classification-arch-search",
+    #     workspace="pcr-simulation"
+    # )
 
-    best_val_loss = float('inf')
+    # experiment.set_name('ImageModel_MetricTest')
 
-    print('Device:', device)
 
-    for epoch in tqdm(range(num_epoch)):  # Choose the number of epochs
-        model.train()
-        running_loss = 0.0
+    # ###########################################
+    # ## Training Loop
+    # ###########################################
 
-        print('Starting epoch', epoch)
+    # criterion = nn.BCELoss()  # Binary cross-entropy loss
+    # optimizer = optim.Adam(model.parameters(), lr=0.0001)
+
+    # best_val_loss = float('inf')
+
+    # print('Device:', device)
+
+    # for epoch in tqdm(range(num_epoch)):  # Choose the number of epochs
+    #     model.train()
+    #     running_loss = 0.0
+
+    #     print('Starting epoch', epoch)
         
-        for images, sequences, labels in tqdm(train_loader):
-            images = images.to(device)
-            sequences, labels = sequences.to(device).unsqueeze(2), labels.to(device)
+    #     for images, sequences, labels in tqdm(train_loader):
+    #         images = images.to(device)
+    #         sequences, labels = sequences.to(device).unsqueeze(2), labels.to(device)
             
-            optimizer.zero_grad()
-            outputs = model(images, sequences)
-            loss = criterion(outputs.squeeze(), labels.float())
+    #         optimizer.zero_grad()
+    #         outputs = model(images, sequences)
+    #         loss = criterion(outputs.squeeze(), labels.float())
 
-            loss.backward()
-            optimizer.step()
+    #         loss.backward()
+    #         optimizer.step()
             
-            running_loss += loss.item() * sequences.size(0)
+    #         running_loss += loss.item() * sequences.size(0)
         
-        # Validation
-        model.eval()
-        val_loss = 0.0
-        correct_predictions = 0
-        total_samples =0
+    #     # Validation
+    #     model.eval()
+    #     val_loss = 0.0
+    #     correct_predictions = 0
+    #     total_samples =0
 
-        val_pred_probs, val_pred_labels, val_true_labels = [], [], []
+    #     val_pred_probs, val_pred_labels, val_true_labels = [], [], []
         
-        with torch.no_grad():
-            for images, sequences, labels in tqdm(val_loader):
-                images = images.to(device)
-                sequences, labels = sequences.to(device).unsqueeze(2), labels.to(device)
+    #     with torch.no_grad():
+    #         for images, sequences, labels in tqdm(val_loader):
+    #             images = images.to(device)
+    #             sequences, labels = sequences.to(device).unsqueeze(2), labels.to(device)
 
-                outputs = model(images, sequences)
-                loss = criterion(outputs.squeeze(), labels.float())
-                val_loss += loss.item() * sequences.size(0)
+    #             outputs = model(images, sequences)
+    #             loss = criterion(outputs.squeeze(), labels.float())
+    #             val_loss += loss.item() * sequences.size(0)
 
-                # Assuming threshold of 0.5 for binary classification
-                predicted_labels = (outputs.squeeze() > 0.5).float()
+    #             # Assuming threshold of 0.5 for binary classification
+    #             predicted_labels = (outputs.squeeze() > 0.5).float()
                 
-                loss = criterion(outputs.squeeze(), labels.float())
-                val_loss += loss.item() * sequences.size(0)
+    #             loss = criterion(outputs.squeeze(), labels.float())
+    #             val_loss += loss.item() * sequences.size(0)
                 
-                correct_predictions += (predicted_labels == labels.float()).sum().item()
-                total_samples += labels.size(0)
+    #             correct_predictions += (predicted_labels == labels.float()).sum().item()
+    #             total_samples += labels.size(0)
 
-                val_pred_probs.extend(outputs.cpu().numpy())
-                val_pred_labels.extend(predicted_labels.cpu().numpy())
-                val_true_labels.extend(labels.cpu().numpy())
+    #             val_pred_probs.extend(outputs.cpu().numpy())
+    #             val_pred_labels.extend(predicted_labels.cpu().numpy())
+    #             val_true_labels.extend(labels.cpu().numpy())
                 
-        # Save model if it's the best so far
-        if val_loss < best_val_loss:
-            best_val_loss = val_loss
-            if not os.path.exists('output/image_model/'):
-                os.makedirs('output/image_model/')
-            torch.save(model.state_dict(), 'output/image_model/best_model_ep50.pth')
-            log_model(experiment, model, model_name=f"CurModel_{epoch}")
+    #     # Save model if it's the best so far
+    #     if val_loss < best_val_loss:
+    #         best_val_loss = val_loss
+    #         if not os.path.exists('output/image_model/'):
+    #             os.makedirs('output/image_model/')
+    #         torch.save(model.state_dict(), 'output/image_model/best_model_ep50.pth')
+    #         log_model(experiment, model, model_name=f"CurModel_{epoch}")
 
-        print(len(val_pred_labels))
-        print(len(val_true_labels))
+    #     print(len(val_pred_labels))
+    #     print(len(val_true_labels))
 
-        val_acc, avg_train_loss, avg_val_loss = correct_predictions/len(val_loader.dataset), running_loss/len(train_loader.dataset), val_loss/len(val_loader.dataset)
-        #val_true_labels, val_pred_probs = val_true_labels.cpu().numpy(), val_pred_probs.cpu().numpy()
-        val_auc = roc_auc_score(val_true_labels, val_pred_probs)
+    #     val_acc, avg_train_loss, avg_val_loss = correct_predictions/len(val_loader.dataset), running_loss/len(train_loader.dataset), val_loss/len(val_loader.dataset)
+    #     #val_true_labels, val_pred_probs = val_true_labels.cpu().numpy(), val_pred_probs.cpu().numpy()
+    #     val_auc = roc_auc_score(val_true_labels, val_pred_probs)
 
-        experiment.log_metrics({'Validation Accuracy': val_acc, 'Avg Training Loss': avg_train_loss, 'Avg Validation Loss': avg_val_loss, 'Validation AUC': val_auc}, epoch=epoch)
-        print(f"Epoch {epoch}, Training Loss: {avg_train_loss}, Validation Loss: {avg_val_loss}, Validation Accuracy: {val_acc}, Validation AUC: {val_auc}")
+    #     experiment.log_metrics({'Validation Accuracy': val_acc, 'Avg Training Loss': avg_train_loss, 'Avg Validation Loss': avg_val_loss, 'Validation AUC': val_auc}, epoch=epoch)
+    #     print(f"Epoch {epoch}, Training Loss: {avg_train_loss}, Validation Loss: {avg_val_loss}, Validation Accuracy: {val_acc}, Validation AUC: {val_auc}")
         

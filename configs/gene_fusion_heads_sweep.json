@@ -3,13 +3,12 @@
     "pcr-classification-fusiongene"
   ],
   "main.batch_size": [
-    32,
-    64,
     128,
     256
   ],
   "trainer.max_epochs": [
-    50
+    50,
+    100
   ],
   "main.model_name": [
     "gene_fusion_heads"
@@ -26,7 +25,6 @@
     1e-2
   ],
   "gene_fusion_heads.hidden_size": [
-    256,
     512,
     1024
   ],

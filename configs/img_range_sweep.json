@@ -1,0 +1,41 @@
+{ 
+  "main.project_name": [
+    "pcr-classification_image_delta"
+  ],
+  "main.batch_size": [
+    64
+  ],
+  "trainer.max_epochs": [
+    50
+  ],
+  "main.model_name": [
+    "curve_delta"
+  ],
+  "main.dataset_name": [
+    "imgseq"
+  ],
+  "main.igi_call": [
+    "true"
+  ],
+  "curve_delta.init_lr": [
+    1e-4,
+    1e-5
+  ],
+  "curve_delta.num_heads": [
+    3
+  ],
+  "curve_delta.latent_dim": [
+    128,
+    256,
+    512
+  ],
+  "curve_delta.pretrained":[
+    true
+  ],
+  "curve_delta.delta":[
+    1,
+    32
+  ]
+
+
+}
