@@ -19,7 +19,7 @@ if __name__ == "__main__":
     print(target_data.sort_values(by="curve_idx").head())
     print(target_data['split'].unique())
 
-    target_data.to_csv('data/groundtruth_df_target_data_split_v2.csv')
+    target_data.to_csv('data/groundtruth_df_target_data_split_v3.csv')
 
     # target_df2 = pd.read_csv('data/groundtruth_df_target_data.csv') 
     # print(target_df2.sort_values(by="curve_idx").head())
@@ -28,6 +28,9 @@ if __name__ == "__main__":
     ####################################
     ## Create dictionary of PCR curves
     ####################################
+
+    print(groundtruth_df)
+    print(groundtruth_df.columns)
 
     # Initialize an empty dictionary
     curve_dict = {}
@@ -53,5 +56,5 @@ if __name__ == "__main__":
         curve_dict[curve_idx] = current_array.copy()
     
     # Open the file in read-binary mode and load the dictionary
-    with open('data/groundtruth_df_curve_dict_split_v2.pkl', 'wb') as file:
+    with open('data/groundtruth_df_curve_dict_split_v3.pkl', 'wb') as file:
         pickle.dump(curve_dict, file)
