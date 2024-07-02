@@ -32,13 +32,15 @@ class Classifier(pl.LightningModule):
         ## TODO: get predictions from your model and store them as y_hat
         y_hat = self.forward(*x)
         # y_hat = self.forward(x)
-        loss = sum(self.loss(y_hat[:,i],y[:,i]) for i in range(3))
+        # loss = sum(self.loss(y_hat[:,i],y[:,i]) for i in range(3))
+        loss = self.loss(y_hat[0][:,0],y)
 
         self.log('train_loss', loss, prog_bar=True, sync_dist=True)
 
         ## Store the predictions and labels for use at the end of the epoch
         self.training_outputs.append({
-            "y_hat": y_hat,
+            "y_hat": y_hat[0][:,0],
+            #"y_hat": y_hat,
             "y": y
         })
         return loss
@@ -48,12 +50,14 @@ class Classifier(pl.LightningModule):
 
         y_hat = self.forward(*x)
         # y_hat = self.forward(x)
-        loss = sum(self.loss(y_hat[:,i],y[:,i]) for i in range(3))
+        loss = self.loss(y_hat[0][:,0],y)
+        #loss = sum(self.loss(y_hat[:,i],y[:,i]) for i in range(3))
 
         self.log('val_loss', loss, prog_bar=True, sync_dist=True)
 
         self.validation_outputs.append({
-            "y_hat": y_hat,
+            "y_hat": y_hat[0][:,0],
+            #"y_hat": y_hat,
             "y": y
         })
         return loss
@@ -64,14 +68,15 @@ class Classifier(pl.LightningModule):
         y_hat = self.forward(*x)
         # y_hat = self.forward(x)
 
-        #loss = self.loss(y_hat,y)
-        loss = sum(self.loss(y_hat[:,i],y[:,i]) for i in range(3))
+        loss = self.loss(y_hat[0][:,0],y)
+        #loss = sum(self.loss(y_hat[:,i],y[:,i]) for i in range(3))
 
         self.log('test_loss', loss, sync_dist=True, prog_bar=True)
         self.log('test_acc', self.accuracy(y_hat, y), sync_dist=True, prog_bar=True)
 
         self.test_outputs.append({
-            "y_hat": y_hat,
+            "y_hat": y_hat[0][:,0],
+            #"y_hat": y_hat,
             "y": y
         })
         return loss
@@ -192,6 +197,69 @@ class TransformerModel(Classifier):
         self.validation_outputs = []
 
 
+class ViTFusionModel(Classifier):
+    def __init__(self, input_size=1, hidden_size=512, latent_dim=512, sequence_length=40, num_layers=5, genes = 6, num_heads=1, delta=64, init_lr=1e-4):
+        super().__init__(num_classes=2, init_lr=init_lr)
+
+
+        self.latent_dim = latent_dim
+        self.delta = delta
+        
+        self.vit = models.vit_b_32(weights=None)
+        state_dict = torch.load('vit_weights/vit_b_32_IMAGENET1K_V1.pth')
+        self.vit.load_state_dict(state_dict)
+        num_ftrs = self.vit.num_classes
+        self.vit_classifier = nn.Linear(num_ftrs, self.latent_dim)  # Adjusting to output a 512-dimensional 
+
+        # Sequence processing via LSTM
+        self.lstm = nn.LSTM(input_size, hidden_size, num_layers, batch_first=True)
+        self.hidden_state = (torch.zeros(num_layers, sequence_length, hidden_size), torch.zeros(num_layers, sequence_length, hidden_size))
+        
+        # Final fully connected layer to ensure the LSTM output has a size of 512
+        self.lstm_fc = nn.Linear(hidden_size, self.latent_dim)
+
+        # Caluclate neural_net input size after appending genes
+        neural_net_input = self.latent_dim*2 + genes + delta
+
+        # Fusion of image and sequence representations
+        self.fc = nn.Sequential(
+            nn.Linear(neural_net_input, 512),  # Concatenated vectors are of size 1024 (512 from image + 512 from sequence)
+            nn.ReLU(),
+            nn.Linear(512, 256),
+            nn.ReLU(),
+            nn.Linear(256, 128),
+            nn.ReLU(),
+            nn.Linear(128, 64),
+            nn.ReLU()
+            # nn.Linear(64, 1),
+            # nn.Sigmoid()
+        )
+
+        # Prediction heads
+        self.heads = nn.ModuleList([nn.Linear(64, 1) for _ in range(num_heads)])
+
+
+    def forward(self, image, sequence, genes):
+        # Image processing
+        img_latent = self.vit_classifier(self.vit(image))
+
+        # Sequence processing
+        lstm_out, _ = self.lstm(sequence)
+        seq_latent = self.lstm_fc(lstm_out[:, -1, :])  # Taking the last output from LSTM for the whole sequence
+
+        # Calculating delta
+        delta_latent = torch.max(sequence, dim=1)[0] - torch.min(sequence, dim=1)[0]
+        delta_latent = delta_latent.expand((-1, self.delta))
+
+        # Fusion
+        fusion = torch.cat((img_latent, seq_latent, genes.squeeze(1), delta_latent), dim=1)
+        output = self.fc(fusion)
+
+        # Get predictions for each head
+        outputs = [torch.sigmoid(head(output)) for head in self.heads]
+
+        return outputs
+
 class FusionModel(Classifier):
     """
         Model that takes in sequence and image data and outputs single prediction head.
@@ -252,6 +320,7 @@ class FusionModel(Classifier):
         output = self.fc(fusion)
 
         return output.squeeze()
+
 
 
 class GeneFusionModel(Classifier):

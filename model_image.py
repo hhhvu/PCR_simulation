@@ -1,5 +1,5 @@
-from comet_ml import Experiment
-from comet_ml.integration.pytorch import log_model
+# from comet_ml import Experiment
+# from comet_ml.integration.pytorch import log_model
 
 import torch
 from torch.utils.data import Dataset, DataLoader
@@ -27,7 +27,7 @@ from tqdm.contrib.concurrent import process_map  # For progress bar with multipr
 # Define a function for generating and saving a single image
 def save_curve_as_image(curve_idx):
     sequence = curve_dict[curve_idx][:40]
-    imgs_folder = 'data/curve_imgs_karlen'
+    imgs_folder = 'data/curve_img_human_fn'
     if not os.path.exists(imgs_folder):
         os.makedirs(imgs_folder, exist_ok=True)  # Ensure thread-safe directory creation
     plt.plot(sequence, linewidth=6)
@@ -131,18 +131,18 @@ if __name__ == "__main__":
     # with open('data/groundtruth_df_curve_dict_split_v2.pkl', 'rb') as file:
     #     curve_dict = pkl.load(file)
     
-    with open('data/karlen_curve_dict.pkl', 'rb') as file: #new_full_curve_dict_fn_v1.pkl
+    with open('data/human_label_curve_dict_fn.pkl', 'rb') as file: # 'data/karlen_curve_dict.pkl' new_full_curve_dict_fn_v1.pkl
         curve_dict = pkl.load(file)
 
     #target_df = pd.read_csv('data/groundtruth_df_target_data_split_v2.csv')
-    target_df = pd.read_csv('data/karlen_target_data.csv') #new_groundtruth_df_target_data_v1.csv
+    target_df = pd.read_csv('data/human_label_df_target_data_split_v1.csv') # 'data/karlen_target_data.csv' new_groundtruth_df_target_data_v1.csv
     
     ###########################################
     ## Get the right normalization values
     ###########################################
 
-    #target_df_filtered = target_df[target_df['split']=='train']
-    target_df_filtered = target_df[target_df['split']=='test']
+    target_df_filtered = target_df[target_df['split']=='train']
+    #target_df_filtered = target_df[target_df['split']=='test']
     curve_dict_filtered = {k: curve_dict[k] for k in curve_dict.keys() if k in target_df_filtered['curve_idx'].values}
 
     mean_list = []
@@ -163,14 +163,13 @@ if __name__ == "__main__":
     ###########################################
 
     #imgs_folder = 'data/curve_imgs_new_cleaner'
-
     curve_indices = list(curve_dict.keys())
 
     # Using ProcessPoolExecutor to parallelize the loop
     # Adjust `max_workers` as per your system's CPU resources if necessary
-    with ProcessPoolExecutor(max_workers=os.cpu_count()-10) as executor:
+    with ProcessPoolExecutor(max_workers=os.cpu_count()//2) as executor:
         # Wrap with tqdm for a progress bar
-        list(process_map(save_curve_as_image, curve_indices, chunksize=10, max_workers=os.cpu_count()))
+        list(process_map(save_curve_as_image, curve_indices, chunksize=10, max_workers=os.cpu_count()//2))
 
 
     # for idx in tqdm(range(len(curve_dict.keys()))):

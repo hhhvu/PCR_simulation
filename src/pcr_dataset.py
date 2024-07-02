@@ -303,7 +303,7 @@ class ImageSequenceGeneDataModule(pl.LightningDataModule):
         Pytorch Lightning DataModule for Image+Sequence dataset. This will download the dataset, prepare data loaders and apply
         data augmentation.
     """
-    def __init__(self, curve_dict_path, target_df_path, batch_size=32, shuffle=True, num_workers=4, igi_call=False, gen_preds=False, img_directory = 'data/curve_imgs_new/', external=False, resampling=False):
+    def __init__(self, curve_dict_path, target_df_path, batch_size=32, shuffle=True, num_workers=4, igi_call=False, gen_preds=False, img_directory = 'data/curve_img_human_fn/', external=False, resampling=False):
         super().__init__()
         self.batch_size = batch_size
         self.shuffle = shuffle
@@ -320,8 +320,9 @@ class ImageSequenceGeneDataModule(pl.LightningDataModule):
             self.curve_dict = pkl.load(file)
         self.target_df = pd.read_csv(target_df_path)
 
-        self.target_df['igi_fp'] = (self.target_df['Igi_call_quant'] > self.target_df['groundtruth_target']).astype(int)
-        self.target_df['igi_fn'] = (self.target_df['Igi_call_quant'] < self.target_df['groundtruth_target']).astype(int)
+        if self.igi_call:
+            self.target_df['igi_fp'] = (self.target_df['Igi_call_quant'] > self.target_df['groundtruth_target']).astype(int)
+            self.target_df['igi_fn'] = (self.target_df['Igi_call_quant'] < self.target_df['groundtruth_target']).astype(int)
 
         self.target_df_train = self.target_df[self.target_df['split']=='train']
         self.curve_dict_train = {k: self.curve_dict[k] for k in self.curve_dict.keys() if k in self.target_df_train['curve_idx'].values}
@@ -354,6 +355,8 @@ class ImageSequenceGeneDataModule(pl.LightningDataModule):
         return
 
     def setup(self, stage=None):
+        print(self.target_df_train.shape)
+        print(len(self.curve_dict_train.keys()))
         self.train = ImageSequenceGeneDataset(self.curve_dict_train, self.target_df_train, igi_call=self.igi_call, mean=self.norm_mean, std=self.norm_std, gen_preds=self.gen_preds, img_directory = self.img_directory)
         self.val = ImageSequenceGeneDataset(self.curve_dict_val, self.target_df_val, igi_call=self.igi_call, mean=self.norm_mean, std=self.norm_std, gen_preds=self.gen_preds, img_directory = self.img_directory)
         self.test = ImageSequenceGeneDataset(self.curve_dict_test, self.target_df_test, igi_call=self.igi_call, mean=self.norm_mean, std=self.norm_std, gen_preds=self.gen_preds, img_directory = self.img_directory)
@@ -374,7 +377,7 @@ class ImageSequenceGeneDataModule(pl.LightningDataModule):
         return DataLoader(self.test, batch_size=self.batch_size, shuffle=False, num_workers = self.num_workers)
 
 class ImageSequenceGeneDataset(Dataset):
-    def __init__(self, curve_dict, target_df, img_directory = 'data/curve_imgs_new/', sequence_len=40, igi_call=False,
+    def __init__(self, curve_dict, target_df, img_directory = 'data/curve_img_human_fn/', sequence_len=40, igi_call=False,
                  mean=0, std=1, gen_preds=False):
         self.curve_dict = curve_dict
         self.target_df = target_df
@@ -418,6 +421,8 @@ class ImageSequenceGeneDataset(Dataset):
             transforms.ToTensor(),  # Convert PIL image to tensor
             transforms.Normalize((0.5,), (0.5,))  # Normalizing to [0,1]
             ])
+        
+        print(f"img_directory: {img_directory}")
    
     def __len__(self):
         return len(self.curve_dict.keys())
@@ -440,12 +445,16 @@ class ImageSequenceGeneDataset(Dataset):
         row = self.target_df.loc[self.target_df['curve_idx'] == curve_idx]
         gene_type = torch.tensor(row[self.one_hot.columns].values, dtype=torch.float32)
 
-        target = torch.tensor(row['groundtruth_target'].values[0], dtype=torch.float)
-
+        #target = torch.tensor(row['groundtruth_target'].values[0], dtype=torch.float)
+        target = torch.tensor(row['Igi_call_quant'].values[0], dtype=torch.float)
+        
         if self.igi_call:
             igi_fp = torch.tensor(row['igi_fp'].values[0], dtype=torch.float)
             igi_fn = torch.tensor(row['igi_fn'].values[0], dtype=torch.float)
             target = torch.stack([target, igi_fp, igi_fn], dim=0)
+        else:
+            target = target
+            #target = torch.stack([target], dim=0)
 
         if self.gen_preds:
             return (curve_img, sequence_normalized.unsqueeze(1), gene_type.squeeze(1)), target, curve_idx
