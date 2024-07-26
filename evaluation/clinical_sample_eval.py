@@ -6,7 +6,7 @@ from sklearn.metrics import roc_auc_score, roc_curve, confusion_matrix, Confusio
 
 if __name__ == "__main__":
     
-    HIGHRISK_THRES = 0.566
+    HIGHRISK_THRES = 0.9255 #see paper_plots_IGI_thresholds
 
     #########################################################################################
     ########## Load data
@@ -28,7 +28,6 @@ if __name__ == "__main__":
 #     fusion_val_pred = pd.read_csv('data/model_outputs/fusion_vit_delta64_val_pred_df.csv')
 #     fusion_train_pred = pd.read_csv('data/model_outputs/fusion_vit_delta64_train_pred_df.csv')
 #     fusion_test_pred = pd.read_csv('data/model_outputs/fusion_vit_delta64_test_pred_df.csv')
-
 #     fusion_all_pred = pd.concat([fusion_train_pred, fusion_val_pred, fusion_test_pred])
     
     fusion_all_pred = pd.read_csv('data/model_outputs/fusion_vit_delta64_clinical_pred_df.csv')
@@ -88,6 +87,7 @@ if __name__ == "__main__":
     plt.ylabel('IGI Label')
     plt.xlabel('Model Predictions')
     plt.title('Agreement Matrix')
+    plt.tight_layout()
     plt.savefig('20240115_clinical_sample_confusion_curve.png')
     plt.show()
 
@@ -98,6 +98,7 @@ if __name__ == "__main__":
     plt.ylabel('IGI Label')
     plt.xlabel('Model Predictions')
     plt.title('Agreement Matrix')
+    plt.tight_layout()
     plt.savefig('20240115_clinical_sample_confusion_sample.png')
     plt.show()
 
@@ -112,6 +113,7 @@ if __name__ == "__main__":
     #plt.title('Agreement Matrix')
     #plt.gca().invert_yaxis()  # Invert y-axis to place Positive on top
     plt.gca().invert_xaxis()  # Invert x-axis to place Positive on left
+    plt.tight_layout()
     plt.savefig('20240115_clinical_sample_confusion_curve.png')
     plt.show()
 
@@ -128,8 +130,11 @@ if __name__ == "__main__":
     #plt.title('Agreement Matrix')
     #plt.gca().invert_yaxis()  # Invert y-axis to place Positive on top
     plt.gca().invert_xaxis()  # Invert x-axis to place Positive on left
+    plt.tight_layout()
     plt.savefig('20240115_clinical_sample_confusion_sample.png')
     plt.show()
+
+    print(disp_sample)
 
     #########################################################################################
     ########## Estimate positive rates for diagreement groups with known label
