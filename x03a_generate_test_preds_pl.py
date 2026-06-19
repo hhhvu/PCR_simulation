@@ -157,10 +157,14 @@ def main(args: argparse.Namespace):
     # dataset_args['img_directory'] = 'data/curve_imgs_new/'
     # dataset_args['external'] = False
 
-    dataset_args['curve_dict_path'] =  'data/new_groundtruth_df_curve_dict_fn_no_invalid.pkl'
-    dataset_args['target_df_path'] = 'data/new_groundtruth_df_target_data_no_invalid.csv'
-    dataset_args['img_directory'] = 'data/curve_imgs_new_cleaner_no_invalid/'
-    dataset_args['external'] = False
+    # === Retest comparison dataset (hardcoded) ===
+    # Same data fed to x03_generate_test_preds.py so the two models can be compared.
+    # Retest rows are all split=='test', so external=True makes normalization use the
+    # test split (train/val are empty here).
+    dataset_args['curve_dict_path'] =  'data/new_retest_curve_dict_1.pkl'
+    dataset_args['target_df_path'] = 'data/new_retest_df_target_data_1.csv'
+    dataset_args['img_directory'] = '/data/sselvan/PCR/curve_imgs_retest/'
+    dataset_args['external'] = True
 
     # dataset_args['curve_dict_path'] =  'data/chip60_curve_dict.pkl'
     # dataset_args['target_df_path'] = 'data/chip60_target_data.csv'
@@ -172,10 +176,10 @@ def main(args: argparse.Namespace):
     # dataset_args['img_directory'] = 'data/curve_imgs_karlen/'
     # dataset_args['external'] = True
 
-    dataset_args['curve_dict_path'] =  'data/known_curve_dict.pkl'
-    dataset_args['target_df_path'] = 'data/known_target_data.csv'
-    dataset_args['img_directory'] = 'data/curve_imgs_known/'
-    dataset_args['external'] = True
+    # dataset_args['curve_dict_path'] =  'data/known_curve_dict.pkl'
+    # dataset_args['target_df_path'] = 'data/known_target_data.csv'
+    # dataset_args['img_directory'] = 'data/curve_imgs_known/'
+    # dataset_args['external'] = True
 
     # dataset_args['curve_dict_path'] =  'data/new_retest_curve_dict_1.pkl'
     # dataset_args['target_df_path'] = 'data/new_retest_df_target_data_1.csv'
@@ -205,10 +209,27 @@ def main(args: argparse.Namespace):
 
     # args.checkpoint_path = 'pcr-classification_seq_large/du56k2l7/checkpoints/SeqModel_large_cleaned_data_no_invalid_1e5lr.ckpt'
     # args.checkpoint_path = 'pcr-classification_seq_gene_large/x2tr9u51/checkpoints/SeqGeneModel_large_cleaned_data_no_invalid.ckpt'
-    args.checkpoint_path = 'pcr-classification_image/46dap4vk/checkpoints/ImageModel_large_cleaned_data_no_invalid.ckpt'
+    # Model A for the comparison: production GeneFusionHeadsModel (img + seq + genes + delta).
+    args.checkpoint_path = 'model_weights/fusiongene_large.ckpt'
 
 
-    model = NAME_TO_MODEL_CLASS[args.model_name].load_from_checkpoint(args.checkpoint_path)
+    # NOTE: fusiongene_large.ckpt IS a Lightning GeneFusionHeadsModel checkpoint (it carries
+    # hyper_parameters/loops/optimizer_states), but it was trained on an OLDER version of the
+    # class whose fc was a plain Linear->ReLU stack. The current class added BatchNorm1d layers,
+    # so .load_from_checkpoint() fails with shape mismatches. We therefore rebuild the model
+    # from the checkpoint's own saved hparams, restore the pre-BatchNorm fc, then load weights.
+    from torch import nn as _nn
+    _ckpt = torch.load(args.checkpoint_path, map_location='cpu', weights_only=False)
+    _hp = _ckpt['hyper_parameters']
+    model = NAME_TO_MODEL_CLASS[args.model_name](**_hp)
+    _nin = _hp['latent_dim'] * 2 + _hp['genes'] + _hp['delta']
+    model.fc = _nn.Sequential(
+        _nn.Linear(_nin, 512), _nn.ReLU(),
+        _nn.Linear(512, 256), _nn.ReLU(),
+        _nn.Linear(256, 128), _nn.ReLU(),
+        _nn.Linear(128, 64), _nn.ReLU(),
+    )
+    model.load_state_dict(_ckpt['state_dict'])
 
     ##########################################
     ### Calculate outputs
@@ -258,44 +279,12 @@ def main(args: argparse.Namespace):
     # 152994.91899060126
     # 104175.45262448292
 
-    valloader = datamodule.val_dataloader()
-
-    probs, igi_fp, igi_fn = [], [], []
-    curve_ids = []
-    model.eval()
-
-    for batch in tqdm(valloader):
-        inputs, labels, ids = batch
-        inputs = [x.to(device) for x in inputs]
-        # inputs = inputs.to(device)
-        #print(inputs)
-        #print(inputs.shape)
-        #print(inputs)
-
-        out = model(*inputs)
-        # out = model(inputs)
-        #print(out)
-        #print(out.shape)
-        # print(len(ids))
-        probs.append(out[:,0].detach().cpu().numpy())
-        igi_fp.append(out[:,1].detach().cpu().numpy())
-        igi_fn.append(out[:,2].detach().cpu().numpy())
-
-        curve_ids.append(ids)
-    
-    val_pred_df = pd.DataFrame({'curve_idx': np.concatenate(curve_ids), 
-                             'outputs': np.concatenate(probs).squeeze(),
-                             'igi_fp': np.concatenate(igi_fp).squeeze(),
-                             'igi_fn': np.concatenate(igi_fn).squeeze()})
-    val_pred_df['split'] = 'val'
-
-    test_pred_df = pd.concat([val_pred_df, test_pred_df], ignore_index=True)
-
-    # test_pred_df.to_csv('data/model_outputs/3_19_SeqGene_Model_ep70_karlen_val_test_pred_df.csv')
-
-    # test_pred_df.to_csv('data/model_outputs/3_20_SeqModel_large_no_invalid_groundtruth_val_test_pred_df.csv', index = False)
-    # test_pred_df.to_csv('data/model_outputs/3_20_SeqGeneModel_large_no_invalid_groundtruth_val_test_pred_df.csv', index = False)
-    test_pred_df.to_csv('data/model_outputs/3_20_ImageModel_large_no_invalid_groundtruth_val_test_pred_df.csv', index = False)
+    # Retest data has only a 'test' split (train/val are empty), so we skip the val loop
+    # that the original script ran here.
+    out_path = 'data/model_outputs/retest_compare_genefusionheads_x03a_pred_df.csv'
+    os.makedirs('data/model_outputs', exist_ok=True)
+    test_pred_df.to_csv(out_path, index=False)
+    print(f"Saved {len(test_pred_df)} predictions to {out_path}")
 
     """
     print("Initializing trainer")

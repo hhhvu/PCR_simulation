@@ -74,7 +74,8 @@ class ImageSequenceGeneDataset(Dataset):
 
         #target data retrieval
         # Extract values from the dataframe
-        target = torch.tensor(row['groundtruth_target'].values[0], dtype=torch.long)
+        # groundtruth_target can be NaN for some retest rows; nan->0 (labels are unused for pred generation)
+        target = torch.tensor(np.nan_to_num(row['groundtruth_target'].values[0]), dtype=torch.long)
         igi_fp = torch.tensor(row['igi_fp'].values[0], dtype=torch.long)
         igi_fn = torch.tensor(row['igi_fn'].values[0], dtype=torch.long)
 
@@ -108,7 +109,9 @@ class FusionModel(nn.Module):
         # self.lstm_fc_delta = nn.Linear(hidden_size, self.latent_dim)
 
         # Caluclate neural_net input size after appending genes
-        neural_net_input = self.latent_dim*2 + genes + delta #(self.latent_dim-1)
+        # NOTE: this checkpoint (10_23_fusion_model_vit) fuses img + seq + genes only
+        # (no delta term) -> fc input = latent*2 + genes = 1030.
+        neural_net_input = self.latent_dim*2 + genes
         print(neural_net_input)
 
         # Fusion of image and sequence representations
@@ -137,15 +140,8 @@ class FusionModel(nn.Module):
         lstm_out, _ = self.lstm(sequence)
         seq_latent = self.lstm_fc(lstm_out[:, -1, :])  # Taking the last output from LSTM for the whole sequence
 
-        # Calculating delta
-        delta_latent = torch.max(sequence, dim=1)[0] - torch.min(sequence, dim=1)[0]
-        delta_latent = delta_latent.expand((-1, self.delta))
-        # delta_seq = sequence[:, 1:] - sequence[:, :-1] #taking first difference
-        # lstm_out_delta, _ = self.lstm_delta(delta_seq)
-        # seq_latent_delta = self.lstm_fc_delta(lstm_out_delta[:, -1, :])  # Taking the last output from LSTM for the whole sequence
-
-        # Fusion
-        fusion = torch.cat((img_latent, seq_latent, genes.squeeze(1), delta_latent), dim=1) #seq_latent_delta
+        # Fusion (img + seq + genes; no delta term for this checkpoint)
+        fusion = torch.cat((img_latent, seq_latent, genes.squeeze(1)), dim=1)
         output = self.fc(fusion)
 
         # Get predictions for each head
@@ -160,16 +156,14 @@ print(device)
 
 if __name__ == "__main__":
 
-    with open('data/groundtruth_df_curve_dict_split_v2.pkl', 'rb') as file:
+    # === Retest comparison dataset (hardcoded) ===
+    # Same data fed to x03a_generate_test_preds_pl.py so the two models can be compared.
+    with open('data/new_retest_curve_dict_1.pkl', 'rb') as file:
         curve_dict = pkl.load(file)
-    
-    target_df = pd.read_csv('data/groundtruth_df_target_data_split_v2.csv')  # Load your DataFrame here
-    target_df.loc[:,['groundtruth_target']] = 1*(target_df.groundtruth == 1)
 
-    #Define two error targets
-    target_df.loc[:,'Igi_call_quant'] = 1*(target_df.igi_call == 'Positive')
-    target_df['igi_fp'] = (target_df['Igi_call_quant'] > target_df['groundtruth_target']).astype(int)
-    target_df['igi_fn'] = (target_df['Igi_call_quant'] < target_df['groundtruth_target']).astype(int)
+    target_df = pd.read_csv('data/new_retest_df_target_data_1.csv')  # Load your DataFrame here
+    # This retest CSV already contains groundtruth_target / Igi_call_quant / igi_fp / igi_fn
+    # (and has no raw 'groundtruth' column), so we use the precomputed columns directly.
 
     print(target_df.head(10))
     print(target_df.columns)
@@ -181,7 +175,7 @@ if __name__ == "__main__":
     ## Get the right normalization values
     ###########################################
     
-    target_df_filtered = target_df[target_df['split']=='train']
+    target_df_filtered = target_df[target_df['split']=='test']
     curve_dict_filtered = {k: curve_dict[k] for k in curve_dict.keys() if k in target_df_filtered['curve_idx'].values}
 
     mean_list = []
@@ -200,9 +194,9 @@ if __name__ == "__main__":
     ###########################################
     ####### Create dataset 
 
-    testvit_dataset = ImageSequenceGeneDataset(curve_dict, target_df,img_directory = 'data/curve_imgs_v2/', split='val', sequence_len=40,
+    testvit_dataset = ImageSequenceGeneDataset(curve_dict, target_df,img_directory = '/data/sselvan/PCR/curve_imgs_retest/', split='test', sequence_len=40,
                                     mean=norm_mean, std = norm_std)
-    testvit_loader = DataLoader(testvit_dataset, batch_size=32, pin_memory=True, shuffle=True)
+    testvit_loader = DataLoader(testvit_dataset, batch_size=32, pin_memory=True, shuffle=False)
 
 
     ###########################################
@@ -220,8 +214,9 @@ if __name__ == "__main__":
     #delta_size = 512
     delta_size = 64
 
+    # Model B for the comparison: ViT fusion model (img + seq + genes, no delta).
     model = FusionModel(input_size, hidden_size, latent_dim, sequence_length, num_layers=num_layers, genes=genes, delta=delta_size)
-    model.load_state_dict(torch.load('output/10_27_fusion_model_vit_delta64.pth'))
+    model.load_state_dict(torch.load('model_weights/10_23_fusion_model_vit_lr1e-4_ep50.pth'))
     model.to(device)  # If you are using GPU
 
     ##########################################
@@ -249,5 +244,7 @@ if __name__ == "__main__":
                              'outputs': np.concatenate(probs).squeeze(),
                              'igi_fp': np.concatenate(igi_fp).squeeze(),
                              'igi_fn': np.concatenate(igi_fn).squeeze()})
-    test_pred_df.to_csv('data/model_outputs/10_27_fusion_model_vit_delta64_val_pred_df.csv', index = False)
+    os.makedirs('data/model_outputs', exist_ok=True)
+    test_pred_df.to_csv('data/model_outputs/retest_compare_vit_fusion_x03_pred_df.csv', index = False)
+    print(f"Saved {len(test_pred_df)} predictions to data/model_outputs/retest_compare_vit_fusion_x03_pred_df.csv")
     
